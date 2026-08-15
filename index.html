@@ -1,0 +1,1495 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Мой холодильник</title>
+<style>
+  :root{
+    /* светлая палитра (по умолчанию) — тёплая бумага */
+    --bg:#EEF0E4; --paper:#F7F7EF; --card:#FFFFFF; --border:#DADFCB;
+    --ink:#232A1E; --muted:#6B715C; --muted-soft:#8b9078;
+    --fresh:#3F6B3B; --fresh-bg:#E6EEE1;
+    --warn:#B8862B; --warn-bg:#F8EBD3;
+    --danger:#A8402F; --danger-bg:#F6E3DF;
+    --primary:#3F6B3B; --primary-dark:#2F5029; --primary-bg:#F1F5EC;
+  }
+  :root[data-accent="blue"]{ --primary:#3A5A73; --primary-dark:#28425A; --primary-bg:#E9EEF1; }
+  :root[data-accent="pink"]{ --primary:#9C4A5C; --primary-dark:#7A3547; --primary-bg:#F3E7E9; }
+
+  /* тёмная палитра — тёплый тёмный шкаф/полка, а не дефолтный чёрный+неон */
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#1C1B16; --paper:#211F18; --card:#28261D; --border:#3D3B2C;
+      --ink:#EDE8D9; --muted:#A6A18C; --muted-soft:#7d795f;
+      --fresh:#8BCB80; --fresh-bg:#233420;
+      --warn:#E3B564; --warn-bg:#3A2E15;
+      --danger:#E58575; --danger-bg:#3B211C;
+      --primary:#77B26D; --primary-dark:#5C9153; --primary-bg:#263420;
+    }
+    :root:not([data-theme="light"])[data-accent="blue"]{ --primary:#7EACC9; --primary-dark:#5F8CAA; --primary-bg:#20303A; }
+    :root:not([data-theme="light"])[data-accent="pink"]{ --primary:#D68CA0; --primary-dark:#B76E84; --primary-bg:#372430; }
+  }
+  :root[data-theme="dark"]{
+    --bg:#1C1B16; --paper:#211F18; --card:#28261D; --border:#3D3B2C;
+    --ink:#EDE8D9; --muted:#A6A18C; --muted-soft:#7d795f;
+    --fresh:#8BCB80; --fresh-bg:#233420;
+    --warn:#E3B564; --warn-bg:#3A2E15;
+    --danger:#E58575; --danger-bg:#3B211C;
+    --primary:#77B26D; --primary-dark:#5C9153; --primary-bg:#263420;
+  }
+  :root[data-theme="dark"][data-accent="blue"]{ --primary:#7EACC9; --primary-dark:#5F8CAA; --primary-bg:#20303A; }
+  :root[data-theme="dark"][data-accent="pink"]{ --primary:#D68CA0; --primary-dark:#B76E84; --primary-bg:#372430; }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);}
+  body{
+    min-height:100vh; color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .display{ font-family:Georgia,'Iowan Old Style','Palatino Linotype','Book Antiqua',Palatino,serif; }
+  .mono{ font-family:'IBM Plex Mono',ui-monospace,'SF Mono','Cascadia Code','Roboto Mono',Consolas,monospace; }
+
+  #app{ min-height:100vh; display:flex; flex-direction:column; padding-bottom:78px; max-width:520px; margin:0 auto; position:relative; }
+  header.topbar{ display:flex; align-items:center; justify-content:space-between; padding:18px 16px 8px; gap:10px; }
+  .brand{ display:flex; align-items:center; gap:8px; min-width:0; }
+  .brand h1{ font-size:20px; font-weight:600; margin:0; letter-spacing:-0.01em; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .date-tag{ font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }
+  .icon-btn{ width:34px; height:34px; border-radius:10px; border:1px solid var(--border); background:var(--card); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink); flex-shrink:0; }
+  .icon-btn:active{ transform:scale(0.96); }
+  main{ flex:1; padding:0 14px; }
+
+  .section-label{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:16px 4px 8px; font-weight:600; }
+  .empty{ text-align:center; color:var(--muted); font-size:13.5px; padding:40px 20px; line-height:1.6; }
+
+  .card{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:12px 14px; display:flex; align-items:center; margin-bottom:8px; gap:10px; }
+  .card.clickable{ cursor:pointer; }
+  .card.urgent{ order:-1; box-shadow:0 0 0 1.5px var(--danger-tag,var(--warn)); }
+  .card-title{ font-size:14.5px; font-weight:600; }
+  .card-meta{ font-size:12.5px; color:var(--muted); margin-top:2px; }
+  .tag{ font-size:10.5px; padding:5px 8px; border-radius:8px; border:1px solid; white-space:nowrap; transform:rotate(-2deg); font-weight:700; text-transform:uppercase; flex-shrink:0; }
+  .round-btn{ width:28px; height:28px; border-radius:20px; border:1px solid var(--border); background:var(--paper); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink); flex-shrink:0; }
+  .checkbox{ width:20px; height:20px; border-radius:6px; border:1.5px solid var(--border); flex-shrink:0; display:flex; align-items:center; justify-content:center; background:var(--card); }
+  .checkbox.checked{ background:var(--primary); border-color:var(--primary); }
+
+  .fab{ position:fixed; bottom:88px; width:52px; height:52px; border-radius:30px; background:var(--primary); border:none; display:flex; align-items:center; justify-content:center; box-shadow:0 6px 16px rgba(0,0,0,0.25); cursor:pointer; z-index:20; color:#fff; left:50%; transform:translateX(180px); }
+  @media (max-width:560px){ .fab{ right:20px; left:auto; transform:none; } }
+
+  .sheet-overlay{ position:fixed; inset:0; background:rgba(20,22,14,0.32); z-index:29; }
+  .sheet{ position:fixed; left:50%; transform:translateX(-50%); bottom:0; width:100%; max-width:520px; background:var(--paper); border-radius:20px 20px 0 0; padding:16px 18px calc(20px + env(safe-area-inset-bottom)); box-shadow:0 -8px 30px rgba(0,0,0,0.2); z-index:30; max-height:86vh; overflow-y:auto; }
+  .sheet-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; position:sticky; top:0; background:var(--paper); }
+  .sheet-title{ font-size:17px; font-weight:600; }
+  input.f, select.f, textarea.f{ width:100%; box-sizing:border-box; border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:14px; margin-bottom:10px; font-family:inherit; background:#FBFBF6; color:var(--ink); }
+  textarea.f{ resize:vertical; }
+  .f-label{ font-size:11px; color:var(--muted); text-transform:uppercase; margin-bottom:6px; display:block; font-weight:600; letter-spacing:.03em; }
+  .row-gap{ display:flex; gap:8px; }
+  .flex1{ flex:1; min-width:0; }
+  .link-row{ display:flex; align-items:center; gap:4px; background:none; border:none; color:var(--primary); font-size:12.5px; padding:4px 0 12px; cursor:pointer; font-weight:600; }
+  .btn-primary{ width:100%; background:var(--primary); color:#fff; border:none; border-radius:10px; padding:12px 0; font-size:14px; font-weight:700; cursor:pointer; }
+  .btn-primary:active{ background:var(--primary-dark); }
+  .btn-secondary{ width:100%; background:transparent; color:var(--primary); border:1.5px solid var(--primary); border-radius:10px; padding:10px 0; font-size:13.5px; font-weight:700; cursor:pointer; margin-bottom:8px; }
+  .btn-ghost{ background:none; border:none; color:var(--muted); font-size:13px; cursor:pointer; padding:8px 0; }
+
+  nav.tabbar{ position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:520px; background:var(--card); border-top:1px solid var(--border); display:flex; padding:8px 0 calc(10px + env(safe-area-inset-bottom)); z-index:10; }
+  .nav-btn{ flex:1; background:none; border:none; display:flex; flex-direction:column; align-items:center; cursor:pointer; gap:2px; color:var(--muted); position:relative; }
+  .nav-btn.active{ color:var(--primary); }
+  .nav-badge{ position:absolute; top:-6px; right:calc(50% - 18px); background:var(--danger); color:#fff; font-size:9px; border-radius:8px; min-width:15px; height:15px; display:flex; align-items:center; justify-content:center; padding:0 3px; }
+  .nav-label{ font-size:10px; }
+
+  .chips-row{ display:flex; gap:8px; overflow-x:auto; padding:10px 2px 4px; scrollbar-width:none; }
+  .chips-row::-webkit-scrollbar{ display:none; }
+  .chip{ font-size:12px; padding:6px 12px; border-radius:20px; border:1px solid var(--border); background:var(--card); color:var(--muted); white-space:nowrap; cursor:pointer; flex-shrink:0; }
+  .chip.active{ background:var(--primary); color:#fff; border-color:var(--primary); }
+
+  .segment-row{ display:flex; gap:8px; margin:10px 2px 14px; }
+  .segment{ flex:1; display:flex; align-items:center; justify-content:center; gap:5px; padding:9px 0; border-radius:10px; border:1px solid var(--border); background:var(--card); color:var(--muted); font-size:12.5px; font-weight:700; cursor:pointer; }
+  .segment.active{ background:var(--primary); color:#fff; border-color:var(--primary); }
+
+  .recipe-card{ background:var(--card); border:1px solid var(--border); border-radius:14px; margin-bottom:10px; overflow:hidden; }
+  .recipe-top{ display:flex; align-items:center; padding:12px 14px; cursor:pointer; gap:10px; }
+  .recipe-body{ padding:0 14px 16px; border-top:1px solid var(--border); }
+  .macro-row{ display:flex; gap:8px; margin:12px 0; flex-wrap:wrap; }
+  .macro-pill{ font-size:12px; background:var(--primary-bg); color:var(--primary-dark); padding:4px 9px; border-radius:8px; }
+  .ing-row{ display:flex; align-items:center; padding:4px 0; font-size:13.5px; gap:4px; }
+  .dot{ width:8px; height:8px; border-radius:8px; flex-shrink:0; }
+  .steps{ font-size:13px; line-height:1.55; margin:6px 0; white-space:pre-wrap; }
+  .stamp{ font-size:10px; text-transform:uppercase; letter-spacing:.03em; color:var(--primary); border:1.5px solid var(--primary); border-radius:8px; padding:5px 8px; transform:rotate(-2deg); white-space:nowrap; font-weight:700; flex-shrink:0; }
+  .stamp-muted{ font-size:10px; color:var(--muted); border:1px solid var(--border); border-radius:8px; padding:5px 8px; white-space:nowrap; font-weight:700; flex-shrink:0; }
+
+  .week-nav{ display:flex; align-items:center; justify-content:space-between; padding:10px 4px 14px; }
+  .week-btn{ width:32px; height:32px; border-radius:8px; border:1px solid var(--border); background:var(--card); cursor:pointer; font-size:14px; }
+  .day-block{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:10px 14px; margin-bottom:8px; }
+  .day-label{ font-size:11px; color:var(--muted); text-transform:uppercase; margin-bottom:8px; letter-spacing:.05em; font-weight:700; }
+  .slot-row{ display:flex; align-items:center; margin-bottom:6px; gap:8px; }
+  .slot-label{ width:62px; font-size:12.5px; color:var(--muted); flex-shrink:0; }
+  .hint{ font-size:12.5px; color:var(--muted); line-height:1.5; margin:6px 4px 14px; }
+
+  .settings-row{ display:flex; align-items:center; justify-content:space-between; padding:14px 4px; border-bottom:1px solid var(--border); cursor:pointer; }
+  .settings-row:last-child{ border-bottom:none; }
+  .settings-row-label{ font-size:14px; font-weight:600; }
+  .settings-row-sub{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .chevron-r{ color:var(--muted); flex-shrink:0; }
+
+  .shelf-row{ display:flex; align-items:center; gap:6px; margin-bottom:8px; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:6px 8px; }
+  .shelf-row input{ border:none; background:transparent; font-size:14px; flex:1; min-width:0; padding:6px 4px; color:var(--ink); }
+  .shelf-row input:focus{ outline:none; }
+  .tiny-btn{ width:26px; height:26px; border-radius:8px; border:1px solid var(--border); background:var(--paper); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--muted); flex-shrink:0; }
+  .tiny-btn:disabled{ opacity:.35; cursor:default; }
+
+  .swatch-row{ display:flex; gap:10px; padding:6px 2px 4px; }
+  .swatch{ flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 6px; border-radius:12px; border:2px solid var(--border); background:var(--card); cursor:pointer; }
+  .swatch.active{ border-color:var(--pswatch); }
+  .swatch-dot{ width:26px; height:26px; border-radius:50%; }
+  .swatch-name{ font-size:11.5px; font-weight:600; color:var(--ink); }
+
+  .modal-overlay{ position:fixed; inset:0; background:rgba(20,22,14,0.4); z-index:39; display:flex; align-items:flex-end; justify-content:center; }
+  @media (min-width:560px){ .modal-overlay{ align-items:center; } }
+  .modal{ background:var(--paper); width:100%; max-width:520px; max-height:88vh; overflow-y:auto; border-radius:20px 20px 0 0; padding:22px 20px calc(22px + env(safe-area-inset-bottom)); box-shadow:0 -8px 30px rgba(0,0,0,0.25); }
+  @media (min-width:560px){ .modal{ border-radius:18px; max-height:80vh; } }
+  .modal h2{ margin:0 0 4px; font-size:19px; font-weight:700; }
+  .guide-block{ margin:16px 0; }
+  .guide-block h3{ font-size:14px; margin:0 0 4px; color:var(--primary-dark); }
+  .guide-block p{ font-size:13px; line-height:1.6; color:var(--ink); margin:0; }
+  .badge-strip{ display:flex; gap:6px; margin:2px 0 14px; flex-wrap:wrap; }
+  .jar-tag{ display:inline-flex; align-items:center; font-size:10px; padding:3px 7px; border-radius:6px; font-weight:700; text-transform:uppercase; }
+
+  .backup-box{ background:var(--card); border:1px solid var(--border); border-radius:10px; padding:10px; font-size:11.5px; margin-bottom:10px; }
+  .toast{ position:fixed; bottom:96px; left:50%; transform:translateX(-50%); background:#232A1E; color:#F5F3EA; font-size:13px; padding:10px 16px; border-radius:10px; z-index:60; box-shadow:0 6px 20px rgba(0,0,0,.3); max-width:88%; text-align:center; }
+
+  svg.ic{ display:block; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+"use strict";
+
+/* ================= constants ================= */
+
+const DEFAULT_SHELVES = ["Овощи и фрукты","Молочное и яйца","Мясо и рыба","Соусы и бакалея","Готовая еда","Другое"];
+const UNITS = ["г","кг","мл","л","шт","ломтик","пучок","зубч"];
+const CATEGORIES = ["Все","Завтрак","Обед","Ужин","Салат","Перекус","Десерт"];
+const MEAL_SLOTS = ["Завтрак","Обед","Ужин"];
+const WEEKDAYS = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+const ACCENTS = [
+  { id:"green", name:"Лесной", dot:"#3F6B3B" },
+  { id:"blue",  name:"Речной", dot:"#3A5A73" },
+  { id:"pink",  name:"Ягодный", dot:"#9C4A5C" },
+];
+const MODES = [
+  { id:"light", name:"Светлая" },
+  { id:"dark", name:"Тёмная" },
+  { id:"system", name:"Системная" },
+];
+const STORAGE_KEY = "moy-holodilnik-v3";
+
+const SEED_RECIPES = [
+  { id:"r2", name:"Куриные бёдра с розмарином и овощами", category:"Ужин", kcal100:155, protein:38, fat:22, carbs:14, time:"45 мин", servings:4, shelfDays:4,
+    steps:"Бёдра и овощи обмазать маслом, чесноком, розмарином, солью — на один противень. Запекать 40 мин при 180°. Сбрызнуть лимоном.",
+    ingredients:[{name:"куриные бёдра",qty:500,unit:"г"},{name:"кабачок",qty:1,unit:"шт"},{name:"болгарский перец",qty:1,unit:"шт"},{name:"чеснок",qty:3,unit:"зубч"},{name:"лимон",qty:1,unit:"шт"}] },
+  { id:"r3", name:"Огуречно-помидорный салат с фетой", category:"Салат", kcal100:87, protein:5, fat:10, carbs:5, time:"5 мин", servings:2, shelfDays:1,
+    steps:"Нарезать огурец и помидоры черри, добавить фету, масло, орегано, лимонный сок. Перемешать.",
+    ingredients:[{name:"огурец",qty:2,unit:"шт"},{name:"помидоры черри",qty:150,unit:"г"},{name:"фета",qty:30,unit:"г"}] },
+  { id:"r10", name:"Индейка по-итальянски с кабачком", category:"Ужин", kcal100:96, protein:35, fat:10, carbs:10, time:"30 мин", servings:4, shelfDays:4,
+    steps:"Индейку обжарить с луком и чесноком, добавить кабачок и помидоры, тушить под крышкой 15-20 мин.",
+    ingredients:[{name:"филе индейки",qty:500,unit:"г"},{name:"кабачок",qty:1,unit:"шт"},{name:"помидор",qty:2,unit:"шт"},{name:"чеснок",qty:2,unit:"зубч"}] },
+  { id:"r12", name:"Овсяноблин с творогом", category:"Завтрак", kcal100:160, protein:20, fat:9, carbs:42, time:"5 мин", servings:1, shelfDays:1,
+    steps:"Смешать овсянку с яйцом, вылить на сковороду, через 2 мин выложить творог и банан, свернуть.",
+    ingredients:[{name:"овсянка",qty:25,unit:"г"},{name:"яйцо",qty:1,unit:"шт"},{name:"творог 5%",qty:60,unit:"г"},{name:"банан",qty:1,unit:"шт"}] },
+  { id:"r14", name:"Кабачковые оладьи", category:"Перекус", kcal100:110, protein:6, fat:5, carbs:28, time:"10 мин", servings:3, shelfDays:3,
+    steps:"Кабачок натереть, отжать воду, смешать с кукурузной мукой, яйцом и йогуртом. Жарить на сухой сковороде по 2-3 мин с каждой стороны.",
+    ingredients:[{name:"кабачок",qty:200,unit:"г"},{name:"кукурузная мука",qty:100,unit:"г"},{name:"яйцо",qty:2,unit:"шт"},{name:"греческий йогурт",qty:100,unit:"г"}] },
+  { id:"r16", name:"Кабачковые лодочки с индейкой", category:"Обед", kcal100:105, protein:35, fat:12, carbs:10, time:"45 мин", servings:4, shelfDays:3,
+    steps:"Кабачки разрезать вдоль, вынуть мякоть. Фарш обжарить с луком и мякотью, добавить соус. Начинить, посыпать сыром, запекать 30 мин при 190°.",
+    ingredients:[{name:"кабачок",qty:2,unit:"шт"},{name:"фарш индейки",qty:300,unit:"г"},{name:"лук репчатый",qty:50,unit:"г"},{name:"твёрдый сыр",qty:50,unit:"г"},{name:"томатный соус",qty:30,unit:"г"}] },
+];
+const BOOK_RECIPES = [
+{"id":"b1","name":"Овсяноблин с творогом и ягодами","category":"Завтрак","kcal100":162,"protein":13,"fat":7,"carbs":12,"time":"10 мин","servings":1,"shelfDays":1,"steps":"Смешиваем в миске овсянку и яйцо до однородности. Обжариваем на сковороде с антипригарным покрытием ~2-3 минуты с каждой стороны. Намазываем творог на готовый овсяноблин и украшаем ягодами.","ingredients":[{"name":"овсяные хлопья","qty":25,"unit":"г"},{"name":"яйцо","qty":1,"unit":"шт"},{"name":"творог 5%","qty":80,"unit":"г"},{"name":"голубика","qty":40,"unit":"г"},{"name":"оливковое масло","qty":1,"unit":"ч.л"}]}
+,
+{"id":"b2","name":"Сырники","category":"Завтрак","kcal100":241,"protein":10,"fat":8,"carbs":27,"time":"20 мин","servings":2,"shelfDays":3,"steps":"Творог разминаем вилкой, добавляем яичный желток, мёд и муку, перемешиваем до однородной консистенции. Формируем сырники и обжариваем на растительном масле до золотистой корочки. Поливаем мёдом и подаём с греческим йогуртом.","ingredients":[{"name":"творог 5%","qty":120,"unit":"г"},{"name":"мёд","qty":15,"unit":"г"},{"name":"мука пшеничная","qty":50,"unit":"г"},{"name":"яичный желток","qty":1,"unit":"шт"},{"name":"греческий йогурт 2%","qty":20,"unit":"г"},{"name":"масло растительное","qty":10,"unit":"г"}]}
+,
+{"id":"b3","name":"Льняной кекс с ягодами","category":"Завтрак","kcal100":165,"protein":6,"fat":8,"carbs":15,"time":"25 мин","servings":1,"shelfDays":4,"steps":"Разминаем банан вилкой, добавляем семена, разрыхлитель и разбиваем яйцо, перемешиваем. Выливаем смесь в форму и добавляем ягоды сверху. Запекаем при температуре 180 градусов около 17 минут.","ingredients":[{"name":"льняные семена","qty":30,"unit":"г"},{"name":"яйцо","qty":1,"unit":"шт"},{"name":"банан","qty":50,"unit":"г"},{"name":"ягоды","qty":50,"unit":"г"},{"name":"разрыхлитель","qty":3,"unit":"г"}]}
+,
+{"id":"b4","name":"Овсянка с йогуртом и ягодами","category":"Завтрак","kcal100":120,"protein":8,"fat":3,"carbs":18,"time":"10 мин","servings":1,"shelfDays":1,"steps":"Заливаем овсяные хлопья горячей водой и оставляем на 5 минут. Перекладываем овсянку в миску. Добавляем йогурт. Добавляем ягоды и измельчённые орехи. Добавляем чайную ложку мёда.","ingredients":[{"name":"овсяные хлопья","qty":50,"unit":"г"},{"name":"греческий йогурт","qty":150,"unit":"г"},{"name":"ягоды свежие или замороженные","qty":50,"unit":"г"},{"name":"грецкие орехи","qty":10,"unit":"г"},{"name":"мёд","qty":1,"unit":"ч.л"}]}
+,
+{"id":"b5","name":"Ленивая овсянка в банке","category":"Завтрак","kcal100":160,"protein":7,"fat":3,"carbs":24,"time":"10 мин (+ на ночь в холодильнике)","servings":1,"shelfDays":1,"steps":"С вечера смешиваем все ингредиенты в банке. Убираем в холодильник. Утром достаём из холодильника.","ingredients":[{"name":"овсяные хлопья","qty":50,"unit":"г"},{"name":"молоко","qty":50,"unit":"мл"},{"name":"греческий йогурт","qty":50,"unit":"г"},{"name":"мёд","qty":12,"unit":"г"}]}
+,
+{"id":"b6","name":"Омлет из белков с овощами","category":"Завтрак","kcal100":65,"protein":7,"fat":2,"carbs":3,"time":"15 мин","servings":1,"shelfDays":2,"steps":"В миске взбиваем белки с щепоткой соли. Нарезаем перец и лук, шпинат измельчаем. На сковороде разогреваем масло, обжариваем лук и перец 2 минуты. Добавляем шпинат и жарим ещё 1 минуту. Выливаем яйца с овощами, готовим на среднем огне до схватывания ~4 минуты.","ingredients":[{"name":"яичные белки","qty":3,"unit":"шт"},{"name":"болгарский перец","qty":30,"unit":"г"},{"name":"шпинат","qty":30,"unit":"г"},{"name":"лук","qty":20,"unit":"г"},{"name":"оливковое масло","qty":1,"unit":"ч.л"},{"name":"соль","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b7","name":"Пудинг с семенами чиа","category":"Завтрак","kcal100":116,"protein":4,"fat":5,"carbs":9,"time":"10 мин (+ на ночь)","servings":1,"shelfDays":2,"steps":"Вечером заливаем семена чиа 2-3 столовыми ложками воды. Утром в полученную массу добавляем йогурт. Мелко нарезаем киви и манго. Добавляем всё в одну ёмкость и украшаем орехами.","ingredients":[{"name":"натуральный йогурт 2%","qty":120,"unit":"г"},{"name":"семена чиа","qty":15,"unit":"г"},{"name":"манго","qty":30,"unit":"г"},{"name":"грецкие орехи","qty":12,"unit":"г"},{"name":"киви","qty":30,"unit":"г"}]}
+,
+{"id":"b8","name":"Кукурузные оладьи с кабачком","category":"Завтрак","kcal100":130,"protein":5,"fat":4,"carbs":20,"time":"15 мин","servings":2,"shelfDays":2,"steps":"Натираем кабачок, отжимаем лишнюю воду. Смешиваем все ингредиенты. Жарим на сковороде без масла по 2-3 минуты с каждой стороны.","ingredients":[{"name":"кукурузная мука","qty":50,"unit":"г"},{"name":"кабачок","qty":100,"unit":"г"},{"name":"яйцо","qty":1,"unit":"шт"},{"name":"йогурт 2%","qty":50,"unit":"г"},{"name":"соль, специи","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b9","name":"Ролл из огурца","category":"Завтрак","kcal100":113,"protein":6,"fat":7,"carbs":4,"time":"15 мин","servings":1,"shelfDays":1,"steps":"Тонко нарезаем огурец на слайсы, выкладываем каждый кусочек внахлёст. Смазываем огурец творожным сыром. Выкладываем авокадо и рыбу. Аккуратно сворачиваем в трубочку и порционно разрезаем.","ingredients":[{"name":"творожный сыр","qty":40,"unit":"г"},{"name":"огурец","qty":1,"unit":"шт"},{"name":"авокадо","qty":0.5,"unit":"шт"},{"name":"лосось слабосолёный","qty":60,"unit":"г"}]}
+,
+{"id":"b10","name":"Омлет с брокколи и шампиньонами","category":"Завтрак","kcal100":144,"protein":11,"fat":10,"carbs":3,"time":"15 мин","servings":1,"shelfDays":2,"steps":"Отвариваем брокколи до мягкости. Шампиньоны нарезаем и обжариваем на сковороде до золотистого цвета. Взбиваем яйца с солью и перцем. Выливаем яйца на сковороду, добавляем брокколи и шампиньоны. Готовим на среднем огне под крышкой 4 минуты, пока яйца не схватятся.","ingredients":[{"name":"яйца","qty":3,"unit":"шт"},{"name":"брокколи","qty":50,"unit":"г"},{"name":"шампиньоны","qty":50,"unit":"г"},{"name":"оливковое масло","qty":1,"unit":"ч.л"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b11","name":"Бутерброды с сыром и овощами","category":"Завтрак","kcal100":69,"protein":5,"fat":3,"carbs":5,"time":"15 мин","servings":1,"shelfDays":1,"steps":"Ставим вариться яйца. Нарезаем огурец, помидор, сыр. Делаем бутерброд из хлеба, сыра и помидора. Чистим яйца и нарезаем. К бутерброду на тарелку добавляем яйца и огурец.","ingredients":[{"name":"яйца","qty":2,"unit":"шт"},{"name":"огурец","qty":1,"unit":"шт"},{"name":"помидор","qty":1,"unit":"шт"},{"name":"сыр моцарелла","qty":20,"unit":"г"},{"name":"хлеб бородинский","qty":1,"unit":"ломтик"}]}
+,
+{"id":"b12","name":"Лёгкий творожно-ягодный пудинг","category":"Завтрак","kcal100":80,"protein":13,"fat":3,"carbs":9,"time":"10 мин (+ 20 мин в холодильнике)","servings":1,"shelfDays":2,"steps":"Всё измельчаем блендером до однородной массы. Выливаем в порционные стаканы. Украшаем ягодами и ставим в холодильник на 20 минут. Можно добавить мёд.","ingredients":[{"name":"творог","qty":150,"unit":"г"},{"name":"ягоды","qty":50,"unit":"г"},{"name":"йогурт","qty":50,"unit":"г"},{"name":"мёд","qty":1,"unit":"ч.л"},{"name":"ваниль","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b13","name":"Салат из авокадо и варёных яиц","category":"Завтрак","kcal100":150,"protein":6,"fat":12,"carbs":4,"time":"15 мин","servings":1,"shelfDays":1,"steps":"Варим яйца, остужаем и нарезаем кубиками. Авокадо очищаем и нарезаем ломтиками. Помидоры нарезаем пополам. Все ингредиенты соединяем, заправляем лимонным соком, маслом, солим и перчим.","ingredients":[{"name":"авокадо","qty":100,"unit":"г"},{"name":"яйца","qty":2,"unit":"шт"},{"name":"помидоры черри","qty":50,"unit":"г"},{"name":"лимонный сок","qty":1,"unit":"ч.л"},{"name":"оливковое масло","qty":1,"unit":"ч.л"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b14","name":"Бананово-овсяные ломтики","category":"Завтрак","kcal100":112,"protein":4,"fat":3,"carbs":20,"time":"15 мин","servings":1,"shelfDays":2,"steps":"В миске разминаем банан вилкой. Добавляем овсяные хлопья, яйцо, немного корицы и перемешиваем. Выливаем смесь на разогретую сковороду с антипригарным покрытием. Жарим на среднем огне по 2 минуты с каждой стороны до золотистого цвета.","ingredients":[{"name":"банан","qty":1,"unit":"шт"},{"name":"овсяные хлопья","qty":50,"unit":"г"},{"name":"яйцо","qty":1,"unit":"шт"},{"name":"корица","qty":0,"unit":"по желанию"},{"name":"орехи и семена","qty":0,"unit":"для украшения"}]}
+,
+{"id":"b15","name":"Ролл с красной рыбой","category":"Завтрак","kcal100":175,"protein":10,"fat":8,"carbs":16,"time":"10 мин","servings":1,"shelfDays":1,"steps":"Тортилью смазываем творожным сыром. На тортилью выкладываем нарезанные овощи и лосось. Сворачиваем ролл.","ingredients":[{"name":"лосось слабосолёный","qty":60,"unit":"г"},{"name":"тортилья","qty":1,"unit":"шт"},{"name":"помидоры","qty":30,"unit":"г"},{"name":"огурец","qty":30,"unit":"г"},{"name":"творожный сыр","qty":20,"unit":"г"}]}
+,
+{"id":"b16","name":"Тыквенное пюре с йогуртом и орехами","category":"Завтрак","kcal100":90,"protein":3,"fat":4,"carbs":12,"time":"10 мин","servings":1,"shelfDays":2,"steps":"Разминаем тыкву вилкой в пюре. Добавляем йогурт и орехи.","ingredients":[{"name":"отварная тыква","qty":100,"unit":"г"},{"name":"греческий йогурт","qty":50,"unit":"г"},{"name":"орехи","qty":10,"unit":"г"},{"name":"корица/ваниль","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b17","name":"Банановые панкейки","category":"Завтрак","kcal100":158,"protein":7,"fat":5,"carbs":24,"time":"15 мин","servings":2,"shelfDays":2,"steps":"В тарелке разминаем банан вилкой. Добавляем к банану яйцо, перемешиваем до однородной массы. Добавляем муку и перемешиваем. Выкладываем на сковороду, обжариваем с двух сторон по 2-3 минуты.","ingredients":[{"name":"банан","qty":1,"unit":"шт"},{"name":"яйца","qty":2,"unit":"шт"},{"name":"сахарозаменитель","qty":1,"unit":"г"},{"name":"мука","qty":50,"unit":"г"}]}
+,
+{"id":"b18","name":"Омлет с шпинатом и сыром","category":"Завтрак","kcal100":150,"protein":11,"fat":10,"carbs":2,"time":"15 мин","servings":1,"shelfDays":2,"steps":"Взбиваем яйца с солью и перцем. Нашинковываем шпинат. Обжариваем шпинат до мягкости. Выливаем яйца к шпинату и посыпаем сыром. Готовим на среднем огне под крышкой 4 минуты.","ingredients":[{"name":"яйца","qty":3,"unit":"шт"},{"name":"свежий шпинат","qty":50,"unit":"г"},{"name":"сыр","qty":30,"unit":"г"},{"name":"масло для жарки","qty":1,"unit":"ч.л"},{"name":"соль и перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b19","name":"Тосты из цельнозернового хлеба с авокадо и яйцом пашот","category":"Завтрак","kcal100":177,"protein":9,"fat":13,"carbs":9,"time":"15 мин","servings":1,"shelfDays":1,"steps":"Авокадо разминаем вилкой, добавляем немного лимонного сока, солим - получается намазка. Варим яйца пашот (3 минуты). Подрумяниваем хлеб в тостере до хрустящей корочки, намазываем авокадо и аккуратно выкладываем яйцо пашот.","ingredients":[{"name":"цельнозерновой хлеб","qty":2,"unit":"ломтик"},{"name":"авокадо","qty":100,"unit":"г"},{"name":"яйца","qty":2,"unit":"шт"},{"name":"лимонный сок","qty":1,"unit":"ч.л"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b20","name":"Гречневая каша с творогом и ягодами","category":"Завтрак","kcal100":120,"protein":7,"fat":3,"carbs":16,"time":"20 мин","servings":1,"shelfDays":2,"steps":"Варим гречку на среднем огне 15 минут. Остывшую гречку смешиваем с творогом и ягодами.","ingredients":[{"name":"гречка сухая","qty":40,"unit":"г"},{"name":"творог 5%","qty":100,"unit":"г"},{"name":"ягоды","qty":50,"unit":"г"}]}
+,
+{"id":"b21","name":"Смузи боул","category":"Завтрак","kcal100":190,"protein":6,"fat":12,"carbs":16,"time":"10 мин (+ 2 часа замачивания)","servings":1,"shelfDays":1,"steps":"Замачиваем овсяные хлопья натуральным йогуртом на 2 часа, хорошо перемешиваем. Нарезаем банан и клубнику. Перекладываем в блендер овсянку с йогуртом, клубнику, банан и фундук, измельчаем. Готовый смузи перекладываем в тарелку, украшаем ягодами, кокосовой стружкой и мятой.","ingredients":[{"name":"клубника","qty":200,"unit":"г"},{"name":"натуральный йогурт","qty":250,"unit":"г"},{"name":"овсяные хлопья","qty":100,"unit":"г"},{"name":"фундук","qty":100,"unit":"г"},{"name":"банан","qty":1,"unit":"шт"},{"name":"кокосовая стружка","qty":1,"unit":"ст.л"},{"name":"мята","qty":10,"unit":"г"}]}
+,
+{"id":"b22","name":"Яичные маффины с овощами","category":"Завтрак","kcal100":140,"protein":10,"fat":10,"carbs":2,"time":"25 мин","servings":4,"shelfDays":3,"steps":"Взбиваем яйца с солью и перцем. Нарезаем овощи кубиками. Смазываем форму для маффинов маслом и выкладываем овощи. Заливаем взбитые яйца. Посыпаем сверху тёртым сыром. Выпекаем 20 минут при температуре 180 градусов.","ingredients":[{"name":"яйца","qty":4,"unit":"шт"},{"name":"болгарский перец","qty":50,"unit":"г"},{"name":"помидоры","qty":50,"unit":"г"},{"name":"лук","qty":30,"unit":"г"},{"name":"сыр твёрдый","qty":30,"unit":"г"},{"name":"соль, перец","qty":0,"unit":"по вкусу"},{"name":"масло для формы","qty":0,"unit":"немного"}]}
+,
+{"id":"b23","name":"Творожно-ореховые крокеты","category":"Завтрак","kcal100":180,"protein":12,"fat":12,"carbs":4,"time":"25 мин","servings":3,"shelfDays":3,"steps":"Взбиваем творог с яйцом и ванилью. Измельчаем орехи. Формируем из массы небольшие шарики, обваливаем в орехах. Можно немного подсластить мёдом. Запекаем в духовке при температуре 180 градусов 10 минут.","ingredients":[{"name":"творог","qty":200,"unit":"г"},{"name":"грецкий орех","qty":30,"unit":"г"},{"name":"яйцо","qty":1,"unit":"шт"},{"name":"ваниль","qty":0,"unit":"по желанию"},{"name":"мёд","qty":0,"unit":"по желанию"}]}
+,
+{"id":"b24","name":"Творожная запеканка с зеленью и овощами","category":"Завтрак","kcal100":66,"protein":11,"fat":0.5,"carbs":3,"time":"30 мин","servings":2,"shelfDays":3,"steps":"В миске смешиваем творог, яйцо, зелень, соль и перец. Нарезаем огурец мелкими кусочками и добавляем в смесь. Смазываем маслом форму и выливаем массу. Выпекаем при температуре 180 градусов 20 минут.","ingredients":[{"name":"творог обезжиренный","qty":200,"unit":"г"},{"name":"яйцо","qty":1,"unit":"шт"},{"name":"зелень (укроп, петрушка)","qty":2,"unit":"ст.л"},{"name":"огурец","qty":50,"unit":"г"},{"name":"соль, перец","qty":0,"unit":"по вкусу"},{"name":"оливковое масло для формы","qty":0,"unit":"немного"}]}
+,
+{"id":"b25","name":"Тосты с творогом и медом","category":"Завтрак","kcal100":180,"protein":8,"fat":4,"carbs":25,"time":"5 мин","servings":1,"shelfDays":1,"steps":"Намазываем творог на хлеб. Поливаем мёдом сверху. Посыпаем измельчёнными орехами.","ingredients":[{"name":"цельнозерновой хлеб","qty":2,"unit":"ломтик"},{"name":"творог","qty":100,"unit":"г"},{"name":"мёд","qty":0,"unit":"по вкусу"},{"name":"орехи","qty":0,"unit":"по желанию"}]}
+,
+{"id":"b26","name":"Котлеты из индейки с зеленью","category":"Обед","kcal100":110,"protein":19,"fat":3,"carbs":2,"time":"40 мин","servings":3,"shelfDays":3,"steps":"Нарезаем лук, разбиваем яйцо, добавляем зелень и фарш индейки. Формируем котлеты и запекаем в духовке 30 минут при 180 градусах.","ingredients":[{"name":"фарш индейки","qty":200,"unit":"г"},{"name":"яйцо","qty":1,"unit":"шт"},{"name":"лук","qty":30,"unit":"г"},{"name":"петрушка","qty":10,"unit":"г"},{"name":"специи","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b27","name":"Мясные ватрушки с овощами и сыром","category":"Обед","kcal100":90,"protein":3,"fat":4,"carbs":2,"time":"1 час","servings":6,"shelfDays":3,"steps":"Натираем на средней тёрке молодой картофель. В миску перекладываем фарш, добавляем картофель и соль. Нарезаем лук, чеснок, морковь, помидор и болгарский перец. Разогреваем сковороду с каплей масла. Обжариваем лук с морковью, затем добавляем помидор и перец. Тушим всё на маленьком огне под крышкой. Застилаем противень пергаментом. Скатываем крупные мясные шарики, формируем из них ватрушки при помощи стакана. Наполняем углубления овощной начинкой, посыпаем тёртым сыром. Запекаем 45 минут при температуре 190 градусов.","ingredients":[{"name":"фарш куриный","qty":600,"unit":"г"},{"name":"лук репчатый","qty":2,"unit":"шт"},{"name":"чеснок","qty":2,"unit":"зубч"},{"name":"морковь","qty":1,"unit":"шт"},{"name":"помидор","qty":1,"unit":"шт"},{"name":"болгарский перец","qty":1,"unit":"шт"},{"name":"молодой картофель","qty":2,"unit":"шт"},{"name":"твёрдый сыр","qty":50,"unit":"г"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b28","name":"Куриные бедра, запечённые с розмарином","category":"Обед","kcal100":130,"protein":20,"fat":4,"carbs":1,"time":"45 мин","servings":2,"shelfDays":3,"steps":"Запекаем бёдра с чесноком и розмарином в духовке 40 минут при 180 градусах. Перед подачей сбрызгиваем лимонным соком.","ingredients":[{"name":"куриные бёдра без кожи","qty":200,"unit":"г"},{"name":"розмарин","qty":0,"unit":"по вкусу"},{"name":"лимон","qty":1,"unit":"шт"},{"name":"чеснок","qty":2,"unit":"зубч"},{"name":"соль, специи","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b29","name":"Пицца на куриной основе с грибами и сыром","category":"Обед","kcal100":127,"protein":13,"fat":8,"carbs":3,"time":"45 мин","servings":4,"shelfDays":3,"steps":"Нарезаем сыр моцарелла средними пластинами. Нарезаем помидоры и грибы тонкими дольками. Формируем круглую основу из фарша на противне, застеленном пергаментом. Смазываем основу томатным соусом. Выкладываем помидоры, грибы, кукурузу и сыр. Отправляем в разогретую до 180 градусов духовку и выпекаем 30 минут.","ingredients":[{"name":"куриный фарш","qty":500,"unit":"г"},{"name":"лук репчатый","qty":1,"unit":"шт"},{"name":"шампиньоны","qty":60,"unit":"г"},{"name":"помидор","qty":1,"unit":"шт"},{"name":"сыр моцарелла","qty":200,"unit":"г"},{"name":"кукуруза консервированная","qty":50,"unit":"г"},{"name":"томатный соус","qty":3,"unit":"ст.л"}]}
+,
+{"id":"b30","name":"Фаршированные перцы с индейкой","category":"Обед","kcal100":115,"protein":18,"fat":2,"carbs":7,"time":"50 мин","servings":2,"shelfDays":3,"steps":"Добавляем в фарш лук и специи. Наполняем перцы фаршем и запекаем в духовке 40 минут при 200 градусах. Поливаем томатным соусом перед подачей.","ingredients":[{"name":"фарш индейки","qty":200,"unit":"г"},{"name":"болгарский перец","qty":2,"unit":"шт"},{"name":"лук","qty":30,"unit":"г"},{"name":"томатный соус","qty":2,"unit":"ст.л"},{"name":"специи","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b31","name":"Куриный бургер","category":"Обед","kcal100":110,"protein":16,"fat":3,"carbs":8,"time":"25 мин","servings":1,"shelfDays":2,"steps":"Измельчаем куриную грудку в блендере. Солим, перчим и формируем из фарша плоскую котлету. Запекаем котлету в духовке при температуре 180 градусов около 15 минут. Разрезаем булочку пополам и немного подсушиваем. На нижнюю часть булочки складываем лист салата, котлету, кружок помидора и огурца, добавляем немного лука. Добавляем йогурт и накрываем верхней булочкой.","ingredients":[{"name":"куриная грудка","qty":150,"unit":"г"},{"name":"цельнозерновая булочка","qty":1,"unit":"шт"},{"name":"лист салата","qty":1,"unit":"шт"},{"name":"помидор","qty":1,"unit":"кружок"},{"name":"огурец","qty":1,"unit":"кружок"},{"name":"лук","qty":0,"unit":"по желанию"},{"name":"греческий йогурт","qty":1,"unit":"ст.л"},{"name":"специи","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b32","name":"Тушёная говядина с овощами","category":"Обед","kcal100":130,"protein":18,"fat":4,"carbs":3,"time":"1 час 15 мин","servings":4,"shelfDays":3,"steps":"Говядину нарезаем кубиками, морковь нарезаем кольцами, лук нарезаем тонко. В сковороду добавляем масло и обжариваем лук с морковью. Добавляем говядину, специи и заливаем водой так, чтобы мясо было покрыто полностью. Тушим под крышкой на слабом огне 1 час до мягкости.","ingredients":[{"name":"говядина","qty":400,"unit":"г"},{"name":"морковь","qty":150,"unit":"г"},{"name":"лук","qty":50,"unit":"г"},{"name":"оливковое масло","qty":1,"unit":"ч.л"},{"name":"специи (соль, перец, лавровый лист)","qty":0,"unit":"по вкусу"},{"name":"вода","qty":0,"unit":"для тушения"}]}
+,
+{"id":"b33","name":"Куриное филе с грибами и шпинатом","category":"Обед","kcal100":75,"protein":17,"fat":3,"carbs":4,"time":"40 мин","servings":3,"shelfDays":3,"steps":"Нарезаем куриное филе на кусочки, добавляем приправы и запекаем в духовке. Нарезаем грибы и обжариваем с луком до золотистого цвета. Добавляем шпинат и обжариваем ещё 2 минуты. Выкладываем курицу в форму, накрываем грибами со шпинатом и запекаем при температуре 180 градусов 20 минут, посыпаем зеленью.","ingredients":[{"name":"куриное филе","qty":400,"unit":"г"},{"name":"шампиньоны","qty":150,"unit":"г"},{"name":"свежий шпинат","qty":100,"unit":"г"},{"name":"лук репчатый","qty":50,"unit":"г"},{"name":"оливковое масло","qty":10,"unit":"г"},{"name":"специи и зелень","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b34","name":"Фрикадельки из курицы и брокколи","category":"Обед","kcal100":126,"protein":20,"fat":4,"carbs":4,"time":"40 мин","servings":5,"shelfDays":3,"steps":"Мелко нарезаем брокколи. Смешиваем брокколи с фаршем, яйцом и луком. Формируем фрикадельки и запекаем 30 минут при 190 градусах.","ingredients":[{"name":"куриный фарш","qty":600,"unit":"г"},{"name":"брокколи","qty":300,"unit":"г"},{"name":"лук","qty":1,"unit":"шт"},{"name":"яйцо","qty":1,"unit":"шт"},{"name":"специи","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b35","name":"Куриная грудка запечённая с травами","category":"Обед","kcal100":105,"protein":20,"fat":2,"carbs":1,"time":"30 мин","servings":2,"shelfDays":3,"steps":"Нарезаем грудку на кусочки. Смазываем кусочки грудки оливковым маслом, посыпаем травами, солью и перцем. Застилаем противень бумагой для выпечки и кладём кусочки грудки. Запекаем при температуре 180 градусов 25 минут.","ingredients":[{"name":"куриная грудка","qty":300,"unit":"г"},{"name":"оливковое масло","qty":1,"unit":"ч.л"},{"name":"сухие травы (тимьян, розмарин, базилик)","qty":0,"unit":"по вкусу"},{"name":"соль и перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b36","name":"Индейка по-итальянски с овощами","category":"Обед","kcal100":85,"protein":16,"fat":2,"carbs":4,"time":"40 мин","servings":4,"shelfDays":3,"steps":"Нарезаем индейку небольшими кусочками. Нарезаем кабачок кружочками. Нарезаем помидоры кубиками. Измельчаем лук и чеснок. В сковороде разогреваем оливковое масло. Обжариваем лук и чеснок до золотистой корочки. Добавляем индейку и обжариваем до золотистой корочки. Выкладываем к индейке кабачки, помидоры и специи. Тушим всё под крышкой на среднем огне 15-20 минут, пока овощи не станут мягкими.","ingredients":[{"name":"филе индейки","qty":400,"unit":"г"},{"name":"кабачок","qty":1,"unit":"шт"},{"name":"помидоры","qty":2,"unit":"шт"},{"name":"лук","qty":1,"unit":"шт"},{"name":"чеснок","qty":2,"unit":"зубч"},{"name":"оливковое масло","qty":1,"unit":"ч.л"},{"name":"специи (базилик, соль, перец)","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b37","name":"Курица терияки с рисом и овощами","category":"Обед","kcal100":176,"protein":22,"fat":5,"carbs":14,"time":"35 мин","servings":4,"shelfDays":3,"steps":"Нарезаем куриное филе кубиками. Разогреваем сковороду, добавляем масло и обжариваем филе до золотистого цвета. Смешиваем соус терияки и соевый соус, добавляем к мясу, перемешиваем и жарим ещё 3 минуты. Варим рис, выкладываем его на тарелку, добавляем мясо.","ingredients":[{"name":"куриное филе","qty":400,"unit":"г"},{"name":"рис","qty":150,"unit":"г"},{"name":"соевый соус","qty":50,"unit":"мл"},{"name":"соус терияки","qty":100,"unit":"мл"},{"name":"растительное масло","qty":2,"unit":"ст.л"},{"name":"соль, перец","qty":0,"unit":"по вкусу"},{"name":"свежие овощи","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b38","name":"Запечённая индейка с кабачками и болгарским перцем","category":"Обед","kcal100":85,"protein":16,"fat":2,"carbs":5,"time":"50 мин","servings":4,"shelfDays":3,"steps":"Нарезаем филе индейки небольшими кусочками. Крупно нарезаем кабачки и перец, лук - полукольцами. Все овощи и мясо солим, перчим, добавляем зелень и специи. Поливаем оливковым маслом. Запекаем в духовке при температуре 200 градусов около 35-40 минут. Перед подачей украшаем зеленью.","ingredients":[{"name":"филе индейки","qty":400,"unit":"г"},{"name":"кабачки","qty":200,"unit":"г"},{"name":"болгарский перец","qty":150,"unit":"г"},{"name":"лук репчатый","qty":50,"unit":"г"},{"name":"оливковое масло","qty":10,"unit":"г"},{"name":"специи, зелень","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b39","name":"Куриные рулеты с овощами","category":"Обед","kcal100":105,"protein":20,"fat":3,"carbs":2,"time":"40 мин","servings":3,"shelfDays":3,"steps":"Слегка отбиваем куриное филе до тонкого слоя. Филе солим, перчим и добавляем специи. Перец и цукини нарезаем тонкими длинными полосками, лук мелко нарезаем. Посыпаем куриное филе тёртым сыром, выкладываем немного овощей. Закручиваем рулеты и закрепляем зубочисткой. Выкладываем рулеты на противень, смазанный оливковым маслом. Запекаем при температуре 200 градусов 25 минут, пока курица не пропечётся.","ingredients":[{"name":"куриное филе","qty":300,"unit":"г"},{"name":"болгарский перец","qty":1,"unit":"шт"},{"name":"цукини","qty":1,"unit":"шт"},{"name":"лук","qty":1,"unit":"шт"},{"name":"твёрдый сыр","qty":50,"unit":"г"},{"name":"оливковое масло","qty":1,"unit":"ч.л"},{"name":"специи (соль, перец, паприка)","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b40","name":"Тефтели из индейки в томатном соусе","category":"Обед","kcal100":101,"protein":15,"fat":2,"carbs":4,"time":"1 час 15 мин","servings":5,"shelfDays":3,"steps":"К фаршу добавляем соль, яйцо и промытый сырой рис, всё перемешиваем. Лепим тефтельки небольшого размера, выкладываем в сковороду. Ставим на плиту, включаем небольшой огонь, слегка подпекаем, чтобы заготовки схватились. Готовим соус, смешивая томатную пасту, сметану, воду и щепотку соли. Заливаем тефтели готовым соусом. Готовим под крышкой на среднем огне примерно 40-60 минут.","ingredients":[{"name":"фарш индейки","qty":500,"unit":"г"},{"name":"бурый рис","qty":100,"unit":"г"},{"name":"лук","qty":1,"unit":"шт"},{"name":"чеснок","qty":2,"unit":"зубч"},{"name":"яйцо","qty":1,"unit":"шт"},{"name":"сметана","qty":2,"unit":"ст.л"},{"name":"томатная паста","qty":3,"unit":"ст.л"},{"name":"вода","qty":500,"unit":"мл"},{"name":"соль и перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b41","name":"Куриные котлеты на пару","category":"Обед","kcal100":90,"protein":18,"fat":2,"carbs":1,"time":"30 мин","servings":3,"shelfDays":3,"steps":"Нарезаем куриное филе на кусочки. Мелко нарезаем лук. Взбиваем яйцо. В миске соединяем куриное филе, лук, яйцо и специи, хорошо перемешиваем. Формируем небольшие шарики из фарша. Выкладываем котлетки в мультиварку и готовим 20 минут.","ingredients":[{"name":"куриное филе","qty":500,"unit":"г"},{"name":"лук","qty":50,"unit":"г"},{"name":"яйцо","qty":1,"unit":"шт"},{"name":"специи","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b42","name":"Шашлык из индейки на шпажках в духовке","category":"Обед","kcal100":67,"protein":11,"fat":2,"carbs":3,"time":"3 часа (с маринованием)","servings":4,"shelfDays":3,"steps":"Нарезаем филе индейки, кладём в объёмную миску. Нарезаем лук кольцами. Добавляем к мясу лук, горчицу, приправу для шашлыка, уксус. Заливаем всё кефиром, хорошо перемешиваем. Миску плотно накрываем плёнкой и убираем на 2 часа в холодильник. Замачиваем деревянные шпажки в холодной воде на 20 минут. Нанизываем на шпажки филе, помидоры черри, лук. Застилаем форму для запекания фольгой, перекладываем шпажки и запекаем в духовке при температуре 200 градусов 30 минут.","ingredients":[{"name":"филе индейки","qty":500,"unit":"г"},{"name":"горчица","qty":1,"unit":"ч.л"},{"name":"кефир 2%","qty":200,"unit":"г"},{"name":"уксус яблочный","qty":1,"unit":"ст.л"},{"name":"лук репчатый","qty":2,"unit":"шт"},{"name":"помидоры черри","qty":200,"unit":"г"},{"name":"приправа для шашлыка","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b43","name":"Тушёная телятина в томате","category":"Обед","kcal100":130,"protein":20,"fat":4,"carbs":3,"time":"1 час 15 мин","servings":3,"shelfDays":3,"steps":"Обжариваем лук и чеснок. Нарезаем на кусочки телятину. Добавляем телятину к луку и чесноку, немного обжариваем. Натираем помидоры на тёрке и добавляем к телятине. Всё тушим под крышкой на слабом огне около 1 часа.","ingredients":[{"name":"телятина","qty":350,"unit":"г"},{"name":"помидоры","qty":200,"unit":"г"},{"name":"лук","qty":50,"unit":"г"},{"name":"чеснок","qty":1,"unit":"зубч"},{"name":"специи","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b44","name":"Куриное суфле","category":"Обед","kcal100":108,"protein":22,"fat":2,"carbs":2,"time":"45 мин","servings":4,"shelfDays":3,"steps":"Измельчаем все ингредиенты в блендере. Выкладываем в форму. Запекаем 35 минут при 180 градусах.","ingredients":[{"name":"куриное филе","qty":600,"unit":"г"},{"name":"яичные белки","qty":2,"unit":"шт"},{"name":"молоко 1,5%","qty":100,"unit":"мл"},{"name":"специи","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b45","name":"Куриное филе с овощами на пару","category":"Обед","kcal100":110,"protein":18,"fat":3,"carbs":5,"time":"30 мин","servings":3,"shelfDays":3,"steps":"Куриное филе нарезаем на небольшие кусочки и готовим на пару до готовности. Измельчаем овощи и готовим на пару до мягкости. Перед подачей сбрызгиваем оливковым маслом, добавляем по вкусу специи и зелень.","ingredients":[{"name":"куриное филе","qty":300,"unit":"г"},{"name":"брокколи","qty":150,"unit":"г"},{"name":"морковь","qty":100,"unit":"г"},{"name":"цветная капуста","qty":50,"unit":"г"},{"name":"оливковое масло","qty":10,"unit":"г"},{"name":"специи и зелень","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b46","name":"Минтай в омлете с мексиканской смесью","category":"Ужин","kcal100":85,"protein":12,"fat":3,"carbs":2,"time":"30 мин","servings":4,"shelfDays":3,"steps":"Размораживаем филе минтая и выкладываем на сухую сковороду с антипригарным покрытием. Немного подсаливаем рыбу и обжариваем на среднем огне 8 минут, пока не выпарится практически вся жидкость. В миске взбиваем яйца, добавляем молоко, соль и специи, перемешиваем венчиком. Добавляем к рыбе замороженную овощную смесь, готовим ещё 3 минуты. К рыбе с овощами добавляем омлетную смесь, закрываем сковороду крышкой, убавляем огонь до минимума и оставляем на 10 минут.","ingredients":[{"name":"филе минтая","qty":650,"unit":"г"},{"name":"смесь овощей","qty":200,"unit":"г"},{"name":"молоко","qty":180,"unit":"мл"},{"name":"яйца","qty":4,"unit":"шт"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b47","name":"Горбуша в йогуртовом маринаде","category":"Ужин","kcal100":141,"protein":20,"fat":6,"carbs":1.5,"time":"1 час","servings":4,"shelfDays":3,"steps":"Смешиваем йогурт, горчицу, чеснок и сок лимона. Маринуем рыбу и оставляем на 30 минут. Запекаем 25 минут при 180 градусах.","ingredients":[{"name":"горбуша","qty":600,"unit":"г"},{"name":"греческий йогурт","qty":120,"unit":"г"},{"name":"горчица","qty":10,"unit":"г"},{"name":"лимонный сок","qty":15,"unit":"мл"},{"name":"чеснок","qty":2,"unit":"зубч"},{"name":"специи","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b48","name":"Рыбная запеканка с цветной капустой","category":"Ужин","kcal100":102,"protein":15,"fat":3,"carbs":4,"time":"45 мин","servings":4,"shelfDays":3,"steps":"Варим цветную капусту 5 минут. Смешиваем яйца с йогуртом. Выкладываем рыбу и капусту в форму, заливаем смесью. Посыпаем сыром и запекаем 35 минут.","ingredients":[{"name":"хек","qty":500,"unit":"г"},{"name":"цветная капуста","qty":400,"unit":"г"},{"name":"яйца","qty":2,"unit":"шт"},{"name":"греческий йогурт","qty":120,"unit":"г"},{"name":"сыр","qty":50,"unit":"г"}]}
+,
+{"id":"b49","name":"Ролл с консервированным тунцом","category":"Ужин","kcal100":99,"protein":24,"fat":0.3,"carbs":0.2,"time":"20 мин","servings":2,"shelfDays":1,"steps":"Для соуса смешиваем мягкий творог со специями и солью. Кубиками нарезаем огурец и яйцо. Натираем сыр на тёрке. Смешиваем сыр, яйцо, огурец и измельчённый тунец. Смешиваем все ингредиенты с соусом. Заворачиваем начинку в лаваш и разрезаем на две части.","ingredients":[{"name":"варёное яйцо","qty":1,"unit":"шт"},{"name":"огурец","qty":1,"unit":"шт"},{"name":"сыр","qty":30,"unit":"г"},{"name":"мягкий творог","qty":50,"unit":"г"},{"name":"тунец консервированный в собственном соку","qty":75,"unit":"г"},{"name":"лаваш без дрожжей","qty":1,"unit":"шт"},{"name":"соль, специи","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b50","name":"Рыба под сырной корочкой","category":"Ужин","kcal100":102,"protein":15,"fat":3,"carbs":4,"time":"35 мин","servings":4,"shelfDays":3,"steps":"Смешиваем йогурт с горчицей. Смазываем рыбу. Натираем сыр и посыпаем им рыбу. Запекаем 25 минут при 180 градусах.","ingredients":[{"name":"филе хека","qty":600,"unit":"г"},{"name":"йогурт","qty":100,"unit":"г"},{"name":"сыр","qty":60,"unit":"г"},{"name":"горчица","qty":10,"unit":"г"},{"name":"специи","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b51","name":"Тунец с овощами на гриле","category":"Ужин","kcal100":85,"protein":13,"fat":1,"carbs":3,"time":"20 мин","servings":2,"shelfDays":2,"steps":"Овощи нарезаем крупными кусками, немного солим. Тунец разминаем вилкой. Обжигаем овощи на гриле, добавляем тунец, сбрызгиваем лимонным соком.","ingredients":[{"name":"тунец консервированный в собственном соку","qty":200,"unit":"г"},{"name":"болгарский перец","qty":1,"unit":"шт"},{"name":"кабачок","qty":150,"unit":"г"},{"name":"лук","qty":1,"unit":"шт"},{"name":"лимон","qty":0,"unit":"для сока"},{"name":"специи, зелень","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b52","name":"Рыбные шарики с зелёной фасолью","category":"Ужин","kcal100":85,"protein":14,"fat":1,"carbs":4,"time":"35 мин","servings":3,"shelfDays":3,"steps":"Отвариваем рыбу в небольшом количестве воды (10 минут). Остужаем рыбу и измельчаем в блендере до однородной массы. Мелко нарезаем лук или измельчаем в блендере. В рыбу добавляем лук, яйцо, панировочные сухари, специи, хорошо перемешиваем. Из полученной массы формируем небольшие шарики. Кипятим воду, опускаем шарики и варим 10-15 минут до готовности.","ingredients":[{"name":"филе трески","qty":300,"unit":"г"},{"name":"лук","qty":1,"unit":"шт"},{"name":"яйцо","qty":1,"unit":"шт"},{"name":"панировочные сухари","qty":2,"unit":"ст.л"},{"name":"зелень","qty":0,"unit":"по вкусу"},{"name":"специи","qty":0,"unit":"по вкусу"},{"name":"зелёная фасоль","qty":150,"unit":"г"}]}
+,
+{"id":"b53","name":"Варёные креветки","category":"Ужин","kcal100":99,"protein":23,"fat":0.3,"carbs":0.2,"time":"10 мин","servings":3,"shelfDays":2,"steps":"Кипятим воду в кастрюле вместе с лавровыми листьями, добавляем соль. В кипящую воду опускаем креветки и варим 3-4 минуты. После варки перекладываем креветки в дуршлаг и промываем под холодной водой.","ingredients":[{"name":"креветки","qty":1,"unit":"пачка"},{"name":"лавровый лист","qty":2,"unit":"шт"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b54","name":"Запечённый судак с овощами","category":"Ужин","kcal100":85,"protein":16,"fat":3,"carbs":3,"time":"40 мин","servings":3,"shelfDays":3,"steps":"Солим, перчим филе судака и сбрызгиваем лимонным соком. Оставляем на 10 минут для маринада. Крупно нарезаем цукини, перец и лук, помидоры - кружками. Выкладываем рыбу и овощи в форму, сбрызгиваем оливковым маслом. Посыпаем зеленью и специями по вкусу, запекаем 25 минут при температуре 180 градусов.","ingredients":[{"name":"филе судака","qty":300,"unit":"г"},{"name":"цукини","qty":150,"unit":"г"},{"name":"болгарский перец","qty":1,"unit":"шт"},{"name":"лук","qty":1,"unit":"шт"},{"name":"помидоры","qty":2,"unit":"шт"},{"name":"оливковое масло","qty":1,"unit":"ст.л"},{"name":"лимон","qty":0.5,"unit":"шт"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b55","name":"Рыбные тефтели из минтая с овощным соусом","category":"Ужин","kcal100":80,"protein":15,"fat":1,"carbs":3,"time":"30 мин","servings":3,"shelfDays":3,"steps":"Измельчаем рыбу в блендере. Добавляем яйцо, лук, овсяные хлопья, специи. Формируем тефтели и запекаем 20 минут при температуре 180 градусов. Подаём тефтели со свежими помидорами.","ingredients":[{"name":"мясо минтая","qty":300,"unit":"г"},{"name":"лук","qty":50,"unit":"г"},{"name":"яйцо","qty":1,"unit":"шт"},{"name":"овсяные хлопья","qty":1,"unit":"ст.л"},{"name":"свежие помидоры","qty":100,"unit":"г"},{"name":"специи, зелень","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b56","name":"Лёгкий салат с креветками и авокадо","category":"Ужин","kcal100":110,"protein":9,"fat":7,"carbs":3,"time":"20 мин","servings":2,"shelfDays":1,"steps":"Отвариваем креветки. Нарезаем авокадо кубиками. Тонко нарезаем огурец. Всё смешиваем, заправляем лимонным соком и маслом.","ingredients":[{"name":"креветки","qty":200,"unit":"г"},{"name":"авокадо","qty":1,"unit":"шт"},{"name":"огурец","qty":150,"unit":"г"},{"name":"листья салата","qty":0,"unit":"по вкусу"},{"name":"лимонный сок, оливковое масло","qty":0,"unit":"по желанию"}]}
+,
+{"id":"b57","name":"Паштет из сёмги","category":"Ужин","kcal100":193,"protein":18,"fat":12,"carbs":1,"time":"25 мин","servings":3,"shelfDays":3,"steps":"Отвариваем сёмгу 15 минут. Даём рыбе охладиться после варки и измельчаем блендером. Измельчаем чеснок и добавляем к рыбе. Добавляем сок лимона, соль и всё перемешиваем.","ingredients":[{"name":"сёмга филе","qty":200,"unit":"г"},{"name":"чеснок","qty":1,"unit":"зубч"},{"name":"лимонный сок","qty":1,"unit":"ст.л"},{"name":"соль","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b58","name":"Лосось на пару с соусом из йогурта и зелени","category":"Ужин","kcal100":120,"protein":20,"fat":4,"carbs":2,"time":"25 мин","servings":3,"shelfDays":2,"steps":"Солим, перчим, сбрызгиваем лимонным соком лосось. Готовим лосось на пару 15 минут. Для соуса смешиваем йогурт с зеленью, луком и специями.","ingredients":[{"name":"филе лосося","qty":300,"unit":"г"},{"name":"натуральный йогурт","qty":100,"unit":"г"},{"name":"зелень (укроп, петрушка)","qty":0,"unit":"по вкусу"},{"name":"лук и чеснок","qty":0,"unit":"по желанию"},{"name":"лимонный сок и специи","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b59","name":"Суфле из минтая","category":"Ужин","kcal100":90,"protein":18,"fat":1.5,"carbs":0.2,"time":"40 мин","servings":4,"shelfDays":3,"steps":"Измельчаем все ингредиенты в блендере. Запекаем в духовке 30 минут при температуре 180 градусов.","ingredients":[{"name":"минтай","qty":600,"unit":"г"},{"name":"яичные белки","qty":2,"unit":"шт"},{"name":"йогурт","qty":80,"unit":"г"},{"name":"соль, специи","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b60","name":"Морской гребешок в соевом соусе","category":"Ужин","kcal100":154,"protein":10,"fat":10,"carbs":1,"time":"20 мин","servings":2,"shelfDays":1,"steps":"Размораживаем гребешки, ополаскиваем водой, даём обсохнуть на бумажном полотенце. Нарезаем зубчики чеснока. На раскалённую сковороду выливаем оливковое масло, добавляем чеснок, обжариваем до золотистого цвета. Добавляем гребешки, жарим по 60 секунд с каждой стороны. Добавляем соевый соус и даём 2 минуты выпариться.","ingredients":[{"name":"морской гребешок","qty":200,"unit":"г"},{"name":"чеснок","qty":2,"unit":"зубч"},{"name":"оливковое масло","qty":30,"unit":"мл"},{"name":"соевый соус","qty":30,"unit":"мл"}]}
+,
+{"id":"b61","name":"Лосось со спаржей","category":"Ужин","kcal100":164,"protein":19,"fat":9,"carbs":2,"time":"30 мин","servings":4,"shelfDays":2,"steps":"Запекаем лосось и спаржу 20 минут в духовке при температуре 180 градусов. Перед подачей поливаем соком лимона.","ingredients":[{"name":"лосось","qty":500,"unit":"г"},{"name":"спаржа","qty":250,"unit":"г"},{"name":"лимон","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b62","name":"Рыбные рулетики из хека с овощами","category":"Ужин","kcal100":90,"protein":16,"fat":1,"carbs":4,"time":"35 мин","servings":3,"shelfDays":3,"steps":"Филе отвариваем, остужаем и разрезаем пополам вдоль. Овощи мелко нарезаем и отвариваем до мягкости. На кусочек рыбы выкладываем немного овощей, сворачиваем в рулетик и закрепляем. Запекаем в духовке около 20 минут при температуре 180 градусов. Перед подачей сбрызгиваем лимонным соком.","ingredients":[{"name":"филе хека","qty":300,"unit":"г"},{"name":"брокколи","qty":150,"unit":"г"},{"name":"морковь","qty":1,"unit":"шт"},{"name":"лук","qty":1,"unit":"шт"},{"name":"специи, зелень","qty":0,"unit":"по вкусу"},{"name":"лимон","qty":0,"unit":"для сока"}]}
+,
+{"id":"b63","name":"Суп-пюре из рыбы","category":"Ужин","kcal100":68,"protein":8,"fat":2,"carbs":17,"time":"40 мин","servings":4,"shelfDays":3,"steps":"Нарезаем кубиками картофель, лук и морковь. В кастрюле разогреваем оливковое масло, добавляем лук и морковь, обжариваем 5-7 минут. Добавляем картофель, воду и варим на среднем огне до мягкости овощей. Рыбу солим, перчим, добавляем и варим ещё 10 минут. Все ингредиенты измельчаем в блендере до пюреобразного состояния.","ingredients":[{"name":"филе минтая","qty":300,"unit":"г"},{"name":"картофель","qty":2,"unit":"шт"},{"name":"морковь","qty":1,"unit":"шт"},{"name":"лук","qty":1,"unit":"шт"},{"name":"сельдерей","qty":1,"unit":"стебель"},{"name":"оливковое масло","qty":1,"unit":"ст.л"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b64","name":"Кальмары в сметанном соусе","category":"Ужин","kcal100":103,"protein":14,"fat":4,"carbs":5,"time":"20 мин","servings":4,"shelfDays":2,"steps":"Кипятим кальмары в горячей воде 3 минуты до побеления и растворения плёнки. Вытаскиваем кальмары, нарезаем кольцами, выкладываем на сковороду. Добавляем сметану к кальмарам. Нарезаем чеснок и добавляем к кальмарам, хорошо всё перемешиваем. Солим, перчим по вкусу. Закрываем крышкой и тушим 5 минут.","ingredients":[{"name":"кальмары","qty":1,"unit":"кг"},{"name":"сметана","qty":150,"unit":"г"},{"name":"растительное масло","qty":15,"unit":"мл"},{"name":"чеснок","qty":2,"unit":"зубч"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b65","name":"Рыбные котлеты из трески на пару","category":"Ужин","kcal100":75,"protein":15,"fat":1,"carbs":2,"time":"30 мин","servings":3,"shelfDays":3,"steps":"Отвариваем филе трески, остужаем и измельчаем в блендере. Добавляем мелко нарезанный лук, яйцо и специи по вкусу. Формируем котлеты и запекаем в духовке 20 минут при температуре 180 градусов.","ingredients":[{"name":"филе трески","qty":300,"unit":"г"},{"name":"лук","qty":1,"unit":"шт"},{"name":"яйцо","qty":1,"unit":"шт"},{"name":"овсяная мука","qty":1,"unit":"ст.л"},{"name":"специи","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b66","name":"Салат с варёными яйцами и овощами","category":"Салат","kcal100":130,"protein":11,"fat":9,"carbs":2,"time":"20 мин","servings":1,"shelfDays":1,"steps":"Отвариваем яйца, остужаем, очищаем и нарезаем кубиками. Овощи нарезаем кубиками, а зелень - мелко. Все ингредиенты смешиваем в миске. Заправляем оливковым маслом и лимонным соком, добавляем соль и перец.","ingredients":[{"name":"яйца","qty":2,"unit":"шт"},{"name":"огурец","qty":80,"unit":"г"},{"name":"помидоры","qty":70,"unit":"г"},{"name":"листья шпината","qty":50,"unit":"г"},{"name":"зелёный лук","qty":10,"unit":"г"},{"name":"оливковое масло","qty":1,"unit":"ст.л"},{"name":"лимонный сок","qty":5,"unit":"г"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b67","name":"Салат с креветками","category":"Салат","kcal100":73,"protein":12,"fat":1.3,"carbs":3,"time":"20 мин","servings":2,"shelfDays":1,"steps":"Отвариваем креветки до готовности. Нарезаем огурцы, помидоры и листья салата. Всё смешиваем и заправляем йогуртом.","ingredients":[{"name":"креветки","qty":250,"unit":"г"},{"name":"огурец","qty":2,"unit":"шт"},{"name":"помидоры черри","qty":6,"unit":"шт"},{"name":"листья салата","qty":100,"unit":"г"},{"name":"йогурт","qty":70,"unit":"г"}]}
+,
+{"id":"b68","name":"Салат с киноа и овощами","category":"Салат","kcal100":110,"protein":4,"fat":6,"carbs":9,"time":"15 мин","servings":1,"shelfDays":1,"steps":"Нарезаем овощи кубиками, а авокадо - мелко. Смешиваем все ингредиенты. Заправляем лимонным соком, оливковым маслом, солим и перчим по вкусу.","ingredients":[{"name":"отварная киноа","qty":80,"unit":"г"},{"name":"огурец","qty":70,"unit":"г"},{"name":"помидор","qty":70,"unit":"г"},{"name":"авокадо","qty":30,"unit":"г"},{"name":"болгарский перец","qty":40,"unit":"г"},{"name":"лимонный сок","qty":5,"unit":"г"},{"name":"оливковое масло","qty":1,"unit":"ст.л"},{"name":"соль, перец","qty":0,"unit":"по вкусу"},{"name":"зелень","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b69","name":"Салат с печёной свеклой и фетой","category":"Салат","kcal100":115,"protein":6,"fat":7,"carbs":6,"time":"45 мин","servings":1,"shelfDays":2,"steps":"Запекаем свёклу, остужаем и нарезаем кубиками. Фету нарезаем небольшими кусочками. Смешиваем свёклу, фету, орехи и рукколу.","ingredients":[{"name":"свёкла","qty":100,"unit":"г"},{"name":"сыр фета","qty":40,"unit":"г"},{"name":"орехи грецкие","qty":10,"unit":"г"},{"name":"руккола","qty":50,"unit":"г"},{"name":"оливковое масло","qty":1,"unit":"ст.л"},{"name":"лимонный сок","qty":5,"unit":"г"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b70","name":"Салат с курицей и овощами","category":"Салат","kcal100":90,"protein":10,"fat":5,"carbs":3,"time":"25 мин","servings":1,"shelfDays":1,"steps":"Нарезаем филе кубиками. Нарезаем овощи: огурец кубиками, помидоры черри пополам, перец тонкими полукольцами. Листья салата рвём руками. Смешиваем все ингредиенты в миске. Заправляем оливковым маслом и лимонным соком, солим и перчим по вкусу.","ingredients":[{"name":"варёное куриное филе","qty":100,"unit":"г"},{"name":"огурец","qty":100,"unit":"г"},{"name":"помидоры черри","qty":50,"unit":"г"},{"name":"болгарский перец","qty":50,"unit":"г"},{"name":"айсберг","qty":50,"unit":"г"},{"name":"петрушка","qty":10,"unit":"г"},{"name":"оливковое масло","qty":1,"unit":"ст.л"},{"name":"лимонный сок","qty":1,"unit":"ч.л"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b71","name":"Салат с творогом","category":"Салат","kcal100":75,"protein":10,"fat":3,"carbs":4,"time":"15 мин","servings":2,"shelfDays":1,"steps":"Нарезаем огурец, редис и укроп. Всё смешиваем с йогуртом и творогом.","ingredients":[{"name":"творог 5%","qty":200,"unit":"г"},{"name":"огурец","qty":2,"unit":"шт"},{"name":"редис","qty":4,"unit":"шт"},{"name":"укроп","qty":20,"unit":"г"},{"name":"греческий йогурт","qty":50,"unit":"г"}]}
+,
+{"id":"b72","name":"Салат с яйцом и брокколи","category":"Салат","kcal100":79,"protein":7,"fat":4,"carbs":4,"time":"20 мин","servings":2,"shelfDays":1,"steps":"Отвариваем брокколи до готовности. Варим яйца ~7 минут. Нарезаем яйца и брокколи, заправляем греческим йогуртом.","ingredients":[{"name":"брокколи","qty":250,"unit":"г"},{"name":"яйца","qty":2,"unit":"шт"},{"name":"греческий йогурт","qty":50,"unit":"г"}]}
+,
+{"id":"b73","name":"Салат с курицей и авокадо","category":"Салат","kcal100":102,"protein":12,"fat":5,"carbs":3,"time":"30 мин","servings":2,"shelfDays":1,"steps":"Отвариваем куриную грудку ~20 минут. Нарезаем листья салата, огурец, авокадо и грудку кубиками. Заправляем салат лимонным соком.","ingredients":[{"name":"куриная грудка","qty":200,"unit":"г"},{"name":"авокадо","qty":100,"unit":"г"},{"name":"огурец","qty":1,"unit":"шт"},{"name":"листья салата","qty":100,"unit":"г"},{"name":"лимонный сок","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b74","name":"Салат с тунцом и овощами","category":"Салат","kcal100":95,"protein":12,"fat":4,"carbs":3,"time":"15 мин","servings":1,"shelfDays":1,"steps":"Разминаем тунец вилкой. Нарезаем овощи кубиками. Смешиваем всё в миске. Заправляем оливковым маслом и лимонным соком, солим и перчим.","ingredients":[{"name":"тунец консервированный в собственном соку","qty":100,"unit":"г"},{"name":"кукуруза консервированная без сахара","qty":50,"unit":"г"},{"name":"помидоры","qty":100,"unit":"г"},{"name":"огурец","qty":100,"unit":"г"},{"name":"листья шпината","qty":50,"unit":"г"},{"name":"оливковое масло","qty":1,"unit":"ст.л"},{"name":"лимонный сок","qty":5,"unit":"г"},{"name":"зелень (укроп, петрушка)","qty":0,"unit":"по вкусу"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b75","name":"Салат из капусты с морковью и яблоками","category":"Салат","kcal100":60,"protein":1,"fat":3,"carbs":9,"time":"15 мин","servings":2,"shelfDays":2,"steps":"Тонко нашинковываем капусту. Натираем морковь и яблоко на крупной тёрке. Смешиваем все ингредиенты в миске. Заправляем оливковым маслом, лимонным соком. Солим и тщательно перемешиваем.","ingredients":[{"name":"белокочанная капуста","qty":200,"unit":"г"},{"name":"морковь","qty":1,"unit":"шт"},{"name":"яблоко зелёное","qty":1,"unit":"шт"},{"name":"оливковое масло","qty":1,"unit":"ст.л"},{"name":"лимонный сок","qty":0,"unit":"по вкусу"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b76","name":"Салат из индейки и капусты","category":"Салат","kcal100":70,"protein":10,"fat":1,"carbs":4,"time":"20 мин","servings":2,"shelfDays":1,"steps":"Нашинковываем капусту. Натираем морковь на тёрке. Нарезаем индейку кубиками. Всё перемешиваем и добавляем йогурт. Посыпаем зеленью.","ingredients":[{"name":"отварное филе индейки","qty":200,"unit":"г"},{"name":"белокочанная капуста","qty":250,"unit":"г"},{"name":"морковь","qty":80,"unit":"г"},{"name":"греческий йогурт","qty":50,"unit":"г"},{"name":"зелень","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b77","name":"Салат из цветной капусты с орехами","category":"Салат","kcal100":107,"protein":3,"fat":9,"carbs":4,"time":"20 мин","servings":2,"shelfDays":1,"steps":"Разделяем цветную капусту на мелкие соцветия и варим 5 минут. Мелко нарезаем зелень, капусту и орехи. В миске смешиваем зелень, капусту и орехи. Заправляем оливковым маслом, лимонным соком, солим и перчим по вкусу.","ingredients":[{"name":"цветная капуста","qty":300,"unit":"г"},{"name":"грецкие орехи","qty":1,"unit":"горсть"},{"name":"оливковое масло","qty":1,"unit":"ст.л"},{"name":"петрушка, укроп","qty":0,"unit":"по вкусу"},{"name":"лимонный сок","qty":0,"unit":"по вкусу"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b78","name":"Салат с чечевицей и овощами","category":"Салат","kcal100":110,"protein":7,"fat":4,"carbs":11,"time":"25 мин","servings":1,"shelfDays":1,"steps":"Отвариваем чечевицу и остужаем. Овощи нарезаем кубиками. Смешиваем все ингредиенты в миске. Заправляем оливковым маслом и лимонным соком, солим и перчим по вкусу.","ingredients":[{"name":"чечевица","qty":100,"unit":"г"},{"name":"огурец","qty":80,"unit":"г"},{"name":"помидор","qty":70,"unit":"г"},{"name":"красный лук","qty":20,"unit":"г"},{"name":"петрушка","qty":10,"unit":"г"},{"name":"оливковое масло","qty":1,"unit":"ст.л"},{"name":"лимонный сок","qty":5,"unit":"г"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b79","name":"Салат метелка","category":"Салат","kcal100":32,"protein":2,"fat":0.1,"carbs":6,"time":"15 мин","servings":2,"shelfDays":2,"steps":"Нарезаем капусту соломкой. Нарезаем свёклу и морковь тонкой соломкой. Перемешиваем капусту, морковь, свёклу и добавляем сок лимона.","ingredients":[{"name":"белокочанная капуста","qty":200,"unit":"г"},{"name":"морковь","qty":100,"unit":"г"},{"name":"свёкла","qty":100,"unit":"г"},{"name":"сок лимона","qty":15,"unit":"мл"}]}
+,
+{"id":"b80","name":"Салат с кальмарами и свежими овощами","category":"Салат","kcal100":85,"protein":15,"fat":3,"carbs":3,"time":"20 мин","servings":2,"shelfDays":1,"steps":"Отвариваем кальмары, остужаем и нарезаем соломкой. Огурец и болгарский перец нарезаем соломкой, зелень измельчаем. Смешиваем кальмары с овощами и зеленью. Заправляем оливковым маслом и лимонным соком, солим и перчим.","ingredients":[{"name":"кальмары отварные","qty":150,"unit":"г"},{"name":"огурец","qty":100,"unit":"г"},{"name":"болгарский перец","qty":50,"unit":"г"},{"name":"зелень","qty":0,"unit":"по вкусу"},{"name":"оливковое масло","qty":1,"unit":"ст.л"},{"name":"лимонный сок","qty":5,"unit":"г"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b81","name":"Творожный мусс с ягодами","category":"Перекус","kcal100":97,"protein":13,"fat":3,"carbs":4,"time":"10 мин","servings":2,"shelfDays":2,"steps":"Взбиваем творог с йогуртом до кремовой консистенции. Добавляем подсластитель и ванилин, всё перемешиваем. Сверху украшаем ягодами.","ingredients":[{"name":"творог 5%","qty":200,"unit":"г"},{"name":"греческий йогурт","qty":100,"unit":"г"},{"name":"ягоды","qty":100,"unit":"г"},{"name":"подсластитель, ванилин","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b82","name":"Сендвич с креветками","category":"Перекус","kcal100":141,"protein":14,"fat":6,"carbs":6,"time":"15 мин","servings":1,"shelfDays":1,"steps":"Мелко крошим авокадо. Натираем яйцо на тёрке. Мелко нарезаем зелень. Смешиваем яйцо, авокадо и зелень. Добавляем соль, перчим, сбрызгиваем соком лимона. Полученную смесь намазываем на хлебцы. Сверху выкладываем креветки.","ingredients":[{"name":"очищенные отварные креветки","qty":150,"unit":"г"},{"name":"яйцо отварное","qty":1,"unit":"шт"},{"name":"авокадо","qty":0.5,"unit":"шт"},{"name":"зелёный салат","qty":20,"unit":"г"},{"name":"соль, перец","qty":0,"unit":"по вкусу"},{"name":"хлебцы","qty":2,"unit":"шт"}]}
+,
+{"id":"b83","name":"Чипсы из цуккини","category":"Перекус","kcal100":17,"protein":1,"fat":0.2,"carbs":3,"time":"1,5 часа (без участия)","servings":1,"shelfDays":3,"steps":"Промываем цуккини и нарезаем тонкими кружочками. Посыпаем каждый кусочек солью, паприкой и сбрызгиваем лимоном. Выкладываем в один слой на противень, застеленный бумагой для выпечки. Высушиваем в духовке при температуре 70-80 градусов около 1,5 часа до хрустящего состояния.","ingredients":[{"name":"молодой цуккини","qty":1,"unit":"шт"},{"name":"морская соль","qty":1,"unit":"щепотка"},{"name":"паприка","qty":1,"unit":"щепотка"},{"name":"сок лимона","qty":1,"unit":"ч.л"}]}
+,
+{"id":"b84","name":"Банан с кешью","category":"Перекус","kcal100":141,"protein":4,"fat":6,"carbs":23,"time":"5 мин","servings":1,"shelfDays":1,"steps":"Очищаем банан от кожуры. Нарезаем банан кружочками. К банану добавляем кешью.","ingredients":[{"name":"банан","qty":1,"unit":"шт"},{"name":"кешью","qty":5,"unit":"шт"}]}
+,
+{"id":"b85","name":"Овощные рулетики с творогом","category":"Перекус","kcal100":80,"protein":6,"fat":4,"carbs":3,"time":"15 мин","servings":2,"shelfDays":1,"steps":"Нарезаем огурцы тонкими пластинками вдоль. В миске смешиваем творог, лимонный сок, соль, перец, мелко нарезанный зелёный лук и зелень. На каждый кусочек огурца выкладываем немного творожной начинки и сворачиваем в рулетик.","ingredients":[{"name":"огурец","qty":100,"unit":"г"},{"name":"творог 2-5%","qty":100,"unit":"г"},{"name":"зелёный лук","qty":10,"unit":"г"},{"name":"свежая зелень (петрушка, укроп)","qty":0,"unit":"по вкусу"},{"name":"лимонный сок","qty":1,"unit":"ч.л"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b86","name":"Яблочные чипсы","category":"Перекус","kcal100":105,"protein":1,"fat":1,"carbs":27,"time":"1,5 часа (без участия)","servings":4,"shelfDays":5,"steps":"Нарезаем яблоки тонкими ломтиками, удаляем сердцевину. Раскладываем дольки на противень, застеленный бумагой для выпечки, посыпаем корицей. Подсушиваем при низкой температуре 80 градусов около 1,5 часа до хрустящей корочки.","ingredients":[{"name":"яблоки кисло-сладкие","qty":5,"unit":"шт"},{"name":"корица молотая","qty":1,"unit":"щепотка"}]}
+,
+{"id":"b87","name":"Запеченная груша с творогом","category":"Перекус","kcal100":96,"protein":9,"fat":3,"carbs":10,"time":"30 мин","servings":2,"shelfDays":2,"steps":"Разрезаем груши пополам и удаляем сердцевину. Наполняем углубление творогом. Посыпаем корицей. Запекаем 20 минут при 180 градусах.","ingredients":[{"name":"груша","qty":2,"unit":"шт"},{"name":"творог 5%","qty":150,"unit":"г"},{"name":"корица","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b88","name":"Цветная капуста на пару с зеленью","category":"Перекус","kcal100":35,"protein":2,"fat":0,"carbs":6,"time":"15 мин","servings":1,"shelfDays":2,"steps":"Готовим на пару цветную капусту около 7 минут. Остужаем цветную капусту, посыпаем свежей зеленью.","ingredients":[{"name":"цветная капуста","qty":150,"unit":"г"},{"name":"зелень (укроп, петрушка)","qty":0,"unit":"по вкусу"},{"name":"лимонный сок","qty":0,"unit":"по желанию"}]}
+,
+{"id":"b89","name":"Кабачковые вафли","category":"Перекус","kcal100":118,"protein":8,"fat":5,"carbs":10,"time":"20 мин","servings":3,"shelfDays":2,"steps":"Натираем кабачок и хорошо отжимаем сок. Натираем сыр на тёрке. К сыру добавляем разбитое яйцо, муку и специи. Всё перемешиваем. Выпекаем в вафельнице 5-7 минут или в духовке 20 минут при 190 градусах.","ingredients":[{"name":"кабачок","qty":200,"unit":"г"},{"name":"яйцо","qty":1,"unit":"шт"},{"name":"цельнозерновая мука","qty":40,"unit":"г"},{"name":"сыр","qty":40,"unit":"г"},{"name":"соль, перец","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b90","name":"Хумус с овощными палочками","category":"Перекус","kcal100":100,"protein":4,"fat":6,"carbs":8,"time":"10 мин","servings":1,"shelfDays":2,"steps":"Нарезаем морковь и огурец палочками. Подаём с хумусом.","ingredients":[{"name":"хумус","qty":50,"unit":"г"},{"name":"морковь","qty":50,"unit":"г"},{"name":"огурец","qty":50,"unit":"г"}]}
+,
+{"id":"b91","name":"Протеиновый йогурт с орехами","category":"Перекус","kcal100":90,"protein":6,"fat":5,"carbs":5,"time":"5 мин","servings":1,"shelfDays":1,"steps":"Смешиваем все ингредиенты. Оставляем на 5 минут настояться.","ingredients":[{"name":"натуральный йогурт без сахара","qty":150,"unit":"г"},{"name":"орехи грецкие","qty":15,"unit":"г"},{"name":"мёд","qty":5,"unit":"г"}]}
+,
+{"id":"b92","name":"Овощные бургеры из кабачков","category":"Перекус","kcal100":70,"protein":4,"fat":3,"carbs":8,"time":"25 мин","servings":2,"shelfDays":2,"steps":"Натираем кабачки на тёрке и отжимаем лишнюю воду. Добавляем к кабачкам яйцо, овсяные хлопья и специи. Формируем котлеты и запекаем до готовности. Выкладываем котлеты на лист айсберга и накрываем сверху.","ingredients":[{"name":"кабачки","qty":150,"unit":"г"},{"name":"яйцо","qty":1,"unit":"шт"},{"name":"овсяные хлопья","qty":2,"unit":"ст.л"},{"name":"специи и зелень","qty":0,"unit":"по вкусу"},{"name":"айсберг","qty":2,"unit":"лист"}]}
+,
+{"id":"b93","name":"Хрустящие нутовые снеки","category":"Перекус","kcal100":170,"protein":8,"fat":4,"carbs":25,"time":"45 мин","servings":4,"shelfDays":4,"steps":"Смешиваем нут со специями и маслом. Запекаем 40 минут при 180 градусах.","ingredients":[{"name":"варёный нут","qty":300,"unit":"г"},{"name":"оливковое масло","qty":5,"unit":"г"},{"name":"соль, чеснок, паприка","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b94","name":"Быстрый протеиновый батончик без сахара","category":"Перекус","kcal100":150,"protein":15,"fat":4,"carbs":12,"time":"10 мин (+ 30 мин в холодильнике)","servings":4,"shelfDays":5,"steps":"В миске смешиваем овсяные хлопья, протеин, миндаль и льняное семя. Добавляем мёд и немного воды, чтобы масса хорошо держала форму. Перекладываем смесь в форму и убираем в холодильник на 30 минут.","ingredients":[{"name":"овсяные хлопья","qty":30,"unit":"г"},{"name":"протеиновый порошок","qty":20,"unit":"г"},{"name":"миндаль измельчённый","qty":10,"unit":"г"},{"name":"льняное семя","qty":5,"unit":"г"},{"name":"мёд","qty":0,"unit":"по вкусу"},{"name":"вода","qty":0,"unit":"для мягкости"}]}
+,
+{"id":"b95","name":"Тунец с огурцами и зеленью","category":"Перекус","kcal100":85,"protein":17,"fat":1,"carbs":1,"time":"10 мин","servings":1,"shelfDays":1,"steps":"Разминаем вилкой тунец. Нарезаем огурцы и листья салата. Смешиваем все ингредиенты.","ingredients":[{"name":"тунец консервированный","qty":100,"unit":"г"},{"name":"огурцы","qty":50,"unit":"г"},{"name":"листья салата","qty":50,"unit":"г"}]}
+,
+{"id":"b96","name":"Яйцо пашот с авокадо на цельнозерновом хлебе","category":"Перекус","kcal100":160,"protein":7,"fat":12,"carbs":9,"time":"15 мин","servings":1,"shelfDays":1,"steps":"Нарезаем авокадо на слайсы. Выкладываем на хлеб авокадо и яйцо пашот.","ingredients":[{"name":"яйцо","qty":1,"unit":"шт"},{"name":"авокадо","qty":0.5,"unit":"шт"},{"name":"цельнозерновой хлеб","qty":1,"unit":"ломтик"}]}
+,
+{"id":"b97","name":"Рулетики из лаваша и курицы","category":"Перекус","kcal100":155,"protein":15,"fat":4,"carbs":14,"time":"30 мин","servings":2,"shelfDays":1,"steps":"Отвариваем грудку ~20 минут. Смазываем лаваш творожным сыром. Нарезаем огурец. Нарезаем курицу. Огурец и курицу добавляем к лавашу и сворачиваем в рулетик.","ingredients":[{"name":"тонкий лаваш","qty":100,"unit":"г"},{"name":"куриная грудка","qty":120,"unit":"г"},{"name":"творожный сыр","qty":40,"unit":"г"},{"name":"огурец","qty":1,"unit":"шт"},{"name":"зелень","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b98","name":"Кефирный смузи с ягодами и семенами чиа","category":"Перекус","kcal100":45,"protein":3,"fat":1,"carbs":5,"time":"5 мин","servings":1,"shelfDays":1,"steps":"Всё взбиваем в блендере до однородной консистенции.","ingredients":[{"name":"нежирный кефир","qty":150,"unit":"мл"},{"name":"ягоды свежие или замороженные","qty":50,"unit":"г"},{"name":"семена чиа","qty":1,"unit":"ч.л"}]}
+,
+{"id":"b99","name":"Смузи с грушей и шпинатом","category":"Перекус","kcal100":46,"protein":1,"fat":0.1,"carbs":11,"time":"10 мин","servings":1,"shelfDays":1,"steps":"Очищаем грушу от семян и кожи. Нарезаем крупными кусочками. Промываем шпинат. Взбиваем все ингредиенты в блендере.","ingredients":[{"name":"сладкая груша","qty":1,"unit":"шт"},{"name":"шпинат листовой","qty":1,"unit":"пучок"},{"name":"яблочный сок без сахара","qty":100,"unit":"мл"}]}
+,
+{"id":"b100","name":"Запеченные яблоки с корицей и орехами","category":"Перекус","kcal100":80,"protein":1,"fat":4,"carbs":10,"time":"25 мин","servings":1,"shelfDays":2,"steps":"Нарезаем яблоки и удаляем сердцевину. Начиняем яблоки орехами и посыпаем корицей. Запекаем при 180 градусах около 15 минут.","ingredients":[{"name":"яблоки","qty":150,"unit":"г"},{"name":"миндаль","qty":10,"unit":"г"},{"name":"корица","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b101","name":"Творожные шарики с кокосом","category":"Десерт","kcal100":146,"protein":17,"fat":6,"carbs":6,"time":"10 мин (+ 30 мин в холодильнике)","servings":4,"shelfDays":3,"steps":"Разминаем творог вилкой или блендером до однородности. Добавляем мёд и ванилин, всё перемешиваем. Формируем небольшие шарики. Обваливаем шарики в кокосовой стружке. Убираем в холодильник на 30 минут.","ingredients":[{"name":"творог 5%","qty":250,"unit":"г"},{"name":"кокосовая стружка","qty":20,"unit":"г"},{"name":"мёд","qty":10,"unit":"г"},{"name":"ванилин","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b102","name":"Шоколадная паста","category":"Десерт","kcal100":180,"protein":3,"fat":14,"carbs":10,"time":"10 мин","servings":3,"shelfDays":2,"steps":"Смешиваем все ингредиенты и взбиваем до однородной массы. Убираем в холодильник на 20 минут.","ingredients":[{"name":"авокадо","qty":1,"unit":"шт"},{"name":"какао","qty":2,"unit":"ст.л"},{"name":"подсластитель","qty":0,"unit":"по вкусу"},{"name":"молоко","qty":40,"unit":"мл"}]}
+,
+{"id":"b103","name":"Банан в шоколаде с миндалем","category":"Десерт","kcal100":205,"protein":5,"fat":10,"carbs":20,"time":"20 мин","servings":8,"shelfDays":2,"steps":"Измельчаем миндаль на тонкие пластинки. Растапливаем шоколад на водяной бане. Очищаем бананы от кожуры и разделяем на две части. В каждую половинку банана вставляем тонкие шпажки и опускаем на несколько секунд в растопленный шоколад. Сверху посыпаем измельчённым миндалем.","ingredients":[{"name":"бананы","qty":4,"unit":"шт"},{"name":"шоколад без сахара","qty":100,"unit":"г"},{"name":"паста арахисовая","qty":40,"unit":"г"},{"name":"миндаль","qty":30,"unit":"г"}]}
+,
+{"id":"b104","name":"Суфле из ряженки","category":"Десерт","kcal100":87,"protein":5,"fat":3,"carbs":3,"time":"20 мин (+ 2 часа в холодильнике)","servings":4,"shelfDays":3,"steps":"Желатин заливаем холодной водой, перемешиваем и оставляем на 15 минут, чтобы он набух. Разогреваем желатин в микроволновке до растворения. В блендере смешиваем ряженку, желатин, мёд, какао, ягоды. Полученную массу ставим в холодильник на 2 часа.","ingredients":[{"name":"ряженка","qty":300,"unit":"мл"},{"name":"желатин","qty":10,"unit":"г"},{"name":"вода","qty":50,"unit":"мл"},{"name":"мёд","qty":1,"unit":"ст.л"},{"name":"какао","qty":1,"unit":"ч.л"},{"name":"ягоды","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b105","name":"Чернично-банановый пирог без муки","category":"Десерт","kcal100":84,"protein":2,"fat":0.3,"carbs":20,"time":"45 мин","servings":6,"shelfDays":3,"steps":"Разминаем бананы вилкой до состояния пюре. Добавляем к бананам белок и сахарозаменитель, всё хорошо перемешиваем. Добавляем крахмал и снова всё перемешиваем. Смазываем форму каплей масла, равномерно раскладываем на дно чернику. Аккуратно выливаем бананово-яичную смесь. Выпекаем при температуре 180 градусов 30 минут.","ingredients":[{"name":"бананы","qty":2,"unit":"шт"},{"name":"черника","qty":200,"unit":"г"},{"name":"белок одного яйца","qty":1,"unit":"шт"},{"name":"сахарозаменитель","qty":0,"unit":"по вкусу"},{"name":"кукурузный крахмал","qty":2,"unit":"ст.л"}]}
+,
+{"id":"b106","name":"Домашнее мороженое из банана и йогурта","category":"Десерт","kcal100":70,"protein":2,"fat":1,"carbs":15,"time":"10 мин (+ 5 часов в морозилке)","servings":3,"shelfDays":3,"steps":"Нарезаем бананы и убираем в морозилку на 3 часа. В блендере смешиваем йогурт, замороженные бананы и ваниль. Всё взбиваем до мягкой однородной массы. Перекладываем в ёмкость и убираем в морозилку ещё на 2 часа.","ingredients":[{"name":"банан","qty":2,"unit":"шт"},{"name":"натуральный йогурт","qty":100,"unit":"г"},{"name":"ваниль","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b107","name":"Чиа-пудинг с кокосовым молоком","category":"Десерт","kcal100":150,"protein":4,"fat":9,"carbs":12,"time":"10 мин (+ 4 часа в холодильнике)","servings":1,"shelfDays":3,"steps":"Смешиваем семена чиа, кокосовое молоко и мёд. Перекладываем всё в стакан. Накрываем плёнкой или крышкой и оставляем в холодильнике на 4 часа. Перед подачей обязательно перемешиваем.","ingredients":[{"name":"семена чиа","qty":40,"unit":"г"},{"name":"кокосовое молоко","qty":200,"unit":"мл"},{"name":"мёд","qty":1,"unit":"ч.л"}]}
+,
+{"id":"b108","name":"Медово-ореховые шарики","category":"Десерт","kcal100":160,"protein":4,"fat":10,"carbs":16,"time":"30 мин","servings":6,"shelfDays":4,"steps":"Замачиваем финики в тёплой воде на 10-15 минут, а потом обсушиваем. Измельчаем финики и орехи в блендере до однородной массы. К полученной массе добавляем мёд и какао, хорошо перемешиваем. Формируем из массы небольшие шарики. Охлаждаем в холодильнике 30 минут.","ingredients":[{"name":"финики без косточек","qty":100,"unit":"г"},{"name":"миндаль","qty":50,"unit":"г"},{"name":"мёд","qty":1,"unit":"ч.л"},{"name":"какао-порошок","qty":1,"unit":"ст.л"}]}
+,
+{"id":"b109","name":"Овсяное печенье без сахара","category":"Десерт","kcal100":120,"protein":3,"fat":2,"carbs":22,"time":"30 мин","servings":8,"shelfDays":5,"steps":"Разминаем банан вилкой до пюре. Добавляем овсяные хлопья и орехи, перемешиваем. Застилаем противень бумагой для выпечки. Лепим небольшие лепёшки и выкладываем на противень. Запекаем при температуре 180 градусов около 10-15 минут, пока печенье не станет золотистым.","ingredients":[{"name":"овсяные хлопья","qty":150,"unit":"г"},{"name":"банан","qty":1,"unit":"шт"},{"name":"орехи","qty":30,"unit":"г"}]}
+,
+{"id":"b110","name":"Белковые конфеты из творога","category":"Десерт","kcal100":170,"protein":18,"fat":8,"carbs":7,"time":"10 мин (+ 30 мин в холодильнике)","servings":6,"shelfDays":4,"steps":"Смешиваем творог, какао, протеин и арахисовую пасту до однородности. Формируем шарики. Убираем в холодильник на 30 минут.","ingredients":[{"name":"творог 2%","qty":200,"unit":"г"},{"name":"какао","qty":10,"unit":"г"},{"name":"протеин","qty":20,"unit":"г"},{"name":"арахисовая паста","qty":20,"unit":"г"}]}
+,
+{"id":"b111","name":"Медовик за 15 минут","category":"Десерт","kcal100":252,"protein":8,"fat":13,"carbs":27,"time":"30 мин","servings":8,"shelfDays":4,"steps":"Взбиваем два яйца и добавляем к ним творог. Растапливаем мёд и масло, добавляем к полученной массе и хорошо всё перемешиваем. Добавляем муку и разрыхлитель. Распределяем тесто в форме, покрытой пергаментной бумагой. Выпекаем в духовке 10 минут при температуре 180 градусов. Разрезаем на 4 квадратика и собираем торт, между слоями добавляем сметану.","ingredients":[{"name":"яйца","qty":2,"unit":"шт"},{"name":"мёд","qty":60,"unit":"г"},{"name":"масло сливочное","qty":30,"unit":"г"},{"name":"творог мягкий","qty":70,"unit":"г"},{"name":"мука","qty":90,"unit":"г"},{"name":"разрыхлитель","qty":5,"unit":"г"},{"name":"сметана","qty":100,"unit":"г"}]}
+,
+{"id":"b112","name":"Шоколадный кекс в кружке","category":"Десерт","kcal100":150,"protein":7,"fat":5,"carbs":18,"time":"5 мин","servings":1,"shelfDays":1,"steps":"Смешиваем яйцо, какао, овсяную муку, йогурт и разрыхлитель. Готовим в микроволновке 3 минуты.","ingredients":[{"name":"яйцо","qty":1,"unit":"шт"},{"name":"какао","qty":1,"unit":"ст.л"},{"name":"овсяная мука","qty":2,"unit":"ст.л"},{"name":"йогурт","qty":2,"unit":"ст.л"},{"name":"разрыхлитель","qty":1,"unit":"щепотка"}]}
+,
+{"id":"b113","name":"Натуральное фруктовое желе","category":"Десерт","kcal100":30,"protein":0.4,"fat":0,"carbs":7,"time":"10 мин (+ 4 часа в холодильнике)","servings":4,"shelfDays":4,"steps":"Желатин замачиваем в холодной воде на 5 минут. Потом растапливаем его на водяной бане или в микроволновке. Выливаем желатин в сок и хорошо перемешиваем. Разливаем по стаканам или формочкам. Оставляем в холодильнике застывать ~4 часа.","ingredients":[{"name":"натуральный апельсиновый сок","qty":500,"unit":"мл"},{"name":"желатин","qty":10,"unit":"г"}]}
+,
+{"id":"b114","name":"Чизкейк без выпечки","category":"Десерт","kcal100":105,"protein":12,"fat":4,"carbs":6,"time":"20 мин (+ 5 часов в холодильнике)","servings":6,"shelfDays":4,"steps":"Замачиваем желатин. Смешиваем йогурт, творог и подсластитель в блендере до однородности. Выливаем желатин в нашу массу. Выкладываем в форму и убираем в холодильник на 5 часов. Перед подачей украшаем ягодами.","ingredients":[{"name":"творог 5%","qty":400,"unit":"г"},{"name":"греческий йогурт","qty":200,"unit":"г"},{"name":"желатин","qty":10,"unit":"г"},{"name":"ягоды","qty":100,"unit":"г"}]}
+,
+{"id":"b115","name":"Морковно-шоколадный пирог на овсяной муке","category":"Десерт","kcal100":170,"protein":8,"fat":7,"carbs":17,"time":"50 мин","servings":8,"shelfDays":4,"steps":"Натираем морковь на мелкой тёрке. В миску отправляем яйца и подсластитель, всё перемешиваем венчиком. В яичную массу добавляем морковь и перемешиваем. Овсяные хлопья измельчаем в кофемолке и добавляем к остальным ингредиентам. Добавляем в тесто какао-порошок и разрыхлитель, перемешиваем до однородной массы. Переносим тесто в силиконовую форму и отправляем в духовку на 30 минут при 180 градусах. Измельчаем шоколад, заливаем горячим молоком и перемешиваем до однородности. Покрываем пирог шоколадом.","ingredients":[{"name":"яйца","qty":3,"unit":"шт"},{"name":"какао-порошок","qty":20,"unit":"г"},{"name":"морковь","qty":200,"unit":"г"},{"name":"овсяные хлопья","qty":90,"unit":"г"},{"name":"разрыхлитель","qty":4,"unit":"г"},{"name":"шоколад без сахара","qty":30,"unit":"г"},{"name":"молоко","qty":30,"unit":"г"},{"name":"подсластитель","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b116","name":"Тирамису в стакане","category":"Десерт","kcal100":135,"protein":10,"fat":4,"carbs":15,"time":"20 мин (+ 4 часа в холодильнике)","servings":2,"shelfDays":3,"steps":"Пропитываем печенье в кофе. Смешиваем йогурт с творогом до однородной консистенции. Выкладываем печенье, а сверху крем - делаем слоями. Сверху посыпаем какао и убираем в холодильник на 4 часа.","ingredients":[{"name":"греческий йогурт","qty":100,"unit":"г"},{"name":"творог мягкий","qty":150,"unit":"г"},{"name":"овсяное печенье без сахара","qty":50,"unit":"г"},{"name":"кофе","qty":50,"unit":"мл"},{"name":"какао","qty":5,"unit":"г"},{"name":"подсластитель","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b117","name":"Запеканка с ягодами","category":"Десерт","kcal100":125,"protein":14,"fat":5,"carbs":8,"time":"50 мин","servings":8,"shelfDays":4,"steps":"Разбиваем яйца и смешиваем их с творогом, манкой и подсластителем. Добавляем ягоды. Выпекаем 40 минут при 180 градусах.","ingredients":[{"name":"творог 5%","qty":500,"unit":"г"},{"name":"яйца","qty":2,"unit":"шт"},{"name":"манка","qty":40,"unit":"г"},{"name":"ягоды","qty":100,"unit":"г"},{"name":"подсластитель","qty":0,"unit":"по вкусу"}]}
+,
+{"id":"b118","name":"Фруктовый салат из цитрусовых","category":"Десерт","kcal100":40,"protein":1,"fat":0,"carbs":10,"time":"10 мин","servings":2,"shelfDays":1,"steps":"Очищаем цитрусовые от кожуры и разрезаем на дольки. Смешиваем всё в салатнице. Можно украсить мятой.","ingredients":[{"name":"апельсин","qty":1,"unit":"шт"},{"name":"мандарин","qty":1,"unit":"шт"},{"name":"грейпфрут","qty":1,"unit":"шт"}]}
+,
+{"id":"b119","name":"Творожные вафли с вишней","category":"Десерт","kcal100":136,"protein":13,"fat":3,"carbs":12,"time":"15 мин","servings":2,"shelfDays":2,"steps":"Смешиваем творог, яйцо, ванилин и муку в одной миске. Разогреваем вафельницу, выкладываем одну столовую ложку теста, затем вишню и сверху ещё ложку теста. Выпекаем 5 минут.","ingredients":[{"name":"творог 2%","qty":150,"unit":"г"},{"name":"яйцо","qty":1,"unit":"шт"},{"name":"мука рисовая","qty":2,"unit":"ч.л"},{"name":"вишня замороженная","qty":20,"unit":"г"},{"name":"ванилин","qty":1,"unit":"щепотка"}]}
+,
+{"id":"b120","name":"Клубничный сорбет","category":"Десерт","kcal100":32,"protein":1,"fat":0.3,"carbs":7,"time":"10 мин (+ 4 часа в морозилке)","servings":4,"shelfDays":3,"steps":"Промываем клубнику, обсушиваем и измельчаем в блендере до гладкой консистенции. Добавляем сок лимона и перемешиваем. Переливаем смесь в контейнер и ставим в морозилку на 4 часа, периодически помешивая.","ingredients":[{"name":"клубника","qty":500,"unit":"г"},{"name":"сок лимона","qty":0,"unit":"по вкусу"}]}
+];
+
+/* ================= helpers ================= */
+
+const uid = () => Math.random().toString(36).slice(2,10);
+const todayISO = () => new Date().toISOString().slice(0,10);
+const addDays = (n, from) => { const d = from ? new Date(from) : new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
+const daysUntil = (iso) => {
+  if(!iso) return null;
+  const target = new Date(iso+"T00:00:00"); const now = new Date(); now.setHours(0,0,0,0);
+  return Math.round((target-now)/86400000);
+};
+const norm = (s) => (s||"").trim().toLowerCase();
+const isWeight = (u) => u==="г"||u==="кг"||u==="мл"||u==="л";
+const itemKcal = (item) => { if(!item.kcal100) return null; return isWeight(item.unit) ? Math.round(item.kcal100*item.qty/100) : Math.round(item.kcal100*item.qty); };
+const esc = (s) => String(s??"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function weekStart(dateStr){ const d = new Date(dateStr); const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); return d.toISOString().slice(0,10); }
+function weekDates(startIso){ return Array.from({length:7},(_,i)=>addDays(i,startIso)); }
+
+function expiryTone(d){
+  if(d===null) return {bg:"var(--card)", fg:"var(--muted)"};
+  if(d<0) return {bg:"var(--danger-bg)", fg:"var(--danger)"};
+  if(d<=2) return {bg:"var(--warn-bg)", fg:"var(--warn)"};
+  return {bg:"var(--fresh-bg)", fg:"var(--fresh)"};
+}
+function expiryLabel(d){
+  if(d===null) return "срок не указан";
+  if(d<0) return "просрочено";
+  if(d===0) return "съесть сегодня";
+  return `ещё ${d} дн`;
+}
+
+/* ================= icons ================= */
+
+function icon(name, size){
+  size = size || 18;
+  const wrap = (inner) => `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+  const paths = {
+    fridge: `<rect x="5" y="2" width="14" height="20" rx="2"/><line x1="5" y1="9" x2="19" y2="9"/><line x1="8" y1="4.5" x2="8" y2="7"/><line x1="8" y1="12" x2="8" y2="15"/>`,
+    snow: `<line x1="12" y1="3" x2="12" y2="21"/><line x1="4.5" y1="7.5" x2="19.5" y2="16.5"/><line x1="19.5" y1="7.5" x2="4.5" y2="16.5"/>`,
+    book: `<path d="M4 5.5c2-1 5-1.3 8 0v13c-3-1.3-6-1-8 0z"/><path d="M20 5.5c-2-1-5-1.3-8 0v13c3-1.3 6-1 8 0z"/>`,
+    cart: `<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M3 4h2l2.2 11.2a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L21 8H6.2"/>`,
+    calendar: `<rect x="3.5" y="5" width="17" height="16" rx="2"/><line x1="3.5" y1="10" x2="20.5" y2="10"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="16" y1="2.5" x2="16" y2="6.5"/>`,
+    gear: `<circle cx="12" cy="12" r="3"/><path d="M12 3v2.2M12 18.8V21M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M3 12h2.2M18.8 12H21M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/>`,
+    plus: `<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>`,
+    minus: `<line x1="5" y1="12" x2="19" y2="12"/>`,
+    x: `<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>`,
+    check: `<polyline points="5,13 10,18 19,7"/>`,
+    trash: `<path d="M4 7h16"/><path d="M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/><path d="M6 7l1 13a1.5 1.5 0 0 0 1.5 1.4h7a1.5 1.5 0 0 0 1.5-1.4L18 7"/>`,
+    chevDown: `<polyline points="6,9 12,15 18,9"/>`,
+    chevUp: `<polyline points="6,15 12,9 18,15"/>`,
+    chevRight: `<polyline points="9,6 15,12 9,18"/>`,
+    up: `<polyline points="6,15 12,9 18,15"/>`,
+    down: `<polyline points="6,9 12,15 18,9"/>`,
+    download: `<path d="M12 3v12"/><polyline points="7,10 12,15 17,10"/><path d="M5 19h14"/>`,
+    upload: `<path d="M12 21V9"/><polyline points="7,14 12,9 17,14"/><path d="M5 4h14"/>`,
+    help: `<circle cx="12" cy="12" r="9"/><path d="M9.3 9a2.7 2.7 0 1 1 3.9 2.4c-1 .5-1.2 1-1.2 2"/><line x1="12" y1="16.6" x2="12" y2="16.7"/>`,
+    palette: `<circle cx="12" cy="12" r="9"/><circle cx="8.2" cy="10.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="8" r="1.3" fill="currentColor" stroke="none"/><circle cx="15.8" cy="10.5" r="1.3" fill="currentColor" stroke="none"/><path d="M9 15.5a3 3 0 0 0 3 2.5c2.8 0 5-2 5-4.6 0-.8-.5-1.2-1.2-1.2h-.6" fill="none"/>`,
+    arrowLeft: `<line x1="19" y1="12" x2="5" y2="12"/><polyline points="11,6 5,12 11,18"/>`,
+    arrowRight: `<line x1="5" y1="12" x2="19" y2="12"/><polyline points="13,6 19,12 13,18"/>`,
+  };
+  return wrap(paths[name] || "");
+}
+
+/* ================= state ================= */
+
+let state = null;
+let ui = { tab:"fridge", loc:"fridge", sheet:null, recipeOpen:null, recipeCat:"Все", recipeSort:"ready", weekStart: weekStart(todayISO()), settingsView:null, toast:null };
+
+function defaultState(){
+  return {
+    items: [],
+    recipes: [...SEED_RECIPES, ...BOOK_RECIPES].map(r => ({...r})),
+    shopping: [],
+    plan: {},
+    shelves: [...DEFAULT_SHELVES],
+    productFacts: {},
+    settings: { accent:"green", mode:"system", seenIntro:false },
+  };
+}
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return { data:defaultState(), isFirstRun:true };
+    const parsed = JSON.parse(raw);
+    const s = defaultState();
+    if(Array.isArray(parsed.items)) s.items = parsed.items;
+    if(Array.isArray(parsed.recipes)) s.recipes = parsed.recipes;
+    if(Array.isArray(parsed.shopping)) s.shopping = parsed.shopping;
+    if(parsed.plan && typeof parsed.plan === "object") s.plan = parsed.plan;
+    if(Array.isArray(parsed.shelves) && parsed.shelves.length) s.shelves = parsed.shelves;
+    if(parsed.productFacts && typeof parsed.productFacts === "object") s.productFacts = parsed.productFacts;
+    if(parsed.settings) s.settings = { ...s.settings, ...parsed.settings };
+    state = s; // recordProductFacts below reads the module-level `state`
+    s.items.forEach(recordProductFacts); // backfill facts from items saved before this feature existed
+    return { data:s, isFirstRun:false };
+  }catch(e){
+    return { data:defaultState(), isFirstRun:true };
+  }
+}
+function saveState(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+}
+
+/* ================= domain logic ================= */
+
+function findMatch(ingName){
+  return state.items.find(i => norm(i.name)===norm(ingName) || norm(i.name).includes(norm(ingName)) || norm(ingName).includes(norm(i.name)));
+}
+
+// Remembers price/store/nutrition per product name, independent of whether the item is still in stock —
+// this is what makes "last bought for X" and "real recipe calories" work even after a product runs out.
+function recordProductFacts(item){
+  if(!item || !item.name || item.type==="dish") return;
+  const hasNutrition = item.kcal100!=null || item.protein100!=null || item.fat100!=null || item.carbs100!=null;
+  const hasPrice = item.price!=null;
+  if(!hasNutrition && !hasPrice) return;
+  const key = norm(item.name);
+  const existing = state.productFacts[key] || {};
+  state.productFacts[key] = {
+    name: item.name, unit: item.unit,
+    kcal100: item.kcal100 ?? existing.kcal100 ?? null,
+    protein100: item.protein100 ?? existing.protein100 ?? null,
+    fat100: item.fat100 ?? existing.fat100 ?? null,
+    carbs100: item.carbs100 ?? existing.carbs100 ?? null,
+    price: item.price ?? existing.price ?? null,
+    store: item.store ?? existing.store ?? null,
+    updatedAt: Date.now(),
+  };
+}
+function lookupProductFacts(name){
+  const n = norm(name);
+  if(state.productFacts[n]) return state.productFacts[n];
+  return Object.values(state.productFacts).find(f => norm(f.name).includes(n) || n.includes(norm(f.name))) || null;
+}
+// Real recipe nutrition computed from the user's own remembered product data (not the book estimate).
+// Only counts an ingredient when we know its per-100g facts AND the unit matches exactly (г vs кг etc. isn't converted).
+function recipeRealNutrition(recipe){
+  let kcal=0, protein=0, fat=0, carbs=0, matched=0;
+  const missing = [];
+  recipe.ingredients.forEach(ing => {
+    const facts = lookupProductFacts(ing.name);
+    if(!facts || facts.kcal100==null || facts.unit!==ing.unit){ missing.push(ing.name); return; }
+    const mult = isWeight(ing.unit) ? ing.qty/100 : ing.qty;
+    kcal += facts.kcal100*mult;
+    if(facts.protein100!=null) protein += facts.protein100*mult;
+    if(facts.fat100!=null) fat += facts.fat100*mult;
+    if(facts.carbs100!=null) carbs += facts.carbs100*mult;
+    matched++;
+  });
+  if(matched===0) return null;
+  const servings = recipe.servings||1;
+  return {
+    matched, total: recipe.ingredients.length, missing,
+    kcalPerServing: Math.round(kcal/servings), proteinPerServing: Math.round(protein/servings),
+    fatPerServing: Math.round(fat/servings), carbsPerServing: Math.round(carbs/servings),
+  };
+}
+function recipeStatus(recipe){
+  const details = recipe.ingredients.map(ing => {
+    const match = findMatch(ing.name);
+    if(!match) return {...ing, status:"missing", have:0};
+    if(match.unit === ing.unit) return {...ing, status: match.qty>=ing.qty ? "ok" : "low", have:match.qty};
+    return {...ing, status:"ok", have:match.qty};
+  });
+  const ok = details.filter(d=>d.status==="ok").length;
+  return { details, ok, total:details.length, ready: ok===details.length && details.length>0 };
+}
+// Candidate real fridge items for a recipe ingredient — same fuzzy name match as everywhere else, stock only (not dishes).
+function candidateItemsFor(ingName){
+  return state.items.filter(i => i.type!=="dish" && (norm(i.name)===norm(ingName) || norm(i.name).includes(norm(ingName)) || norm(ingName).includes(norm(i.name))));
+}
+function buildCookForm(recipeId){
+  const recipe = state.recipes.find(r=>r.id===recipeId);
+  if(!recipe) return null;
+  return {
+    recipeId,
+    servings: recipe.servings || 1,
+    rows: recipe.ingredients.map(ing => {
+      const candidates = candidateItemsFor(ing.name);
+      const best = candidates[0] || null;
+      return {
+        name: ing.name,
+        selectedItemId: best ? best.id : "",
+        qty: (best && best.unit===ing.unit) ? ing.qty : "",
+      };
+    }),
+  };
+}
+function openCookSheet(recipeId){
+  const form = buildCookForm(recipeId);
+  if(!form) return;
+  ui.sheet = "cook-recipe";
+  ui.cookForm = form;
+  render();
+}
+// Reads the live cook sheet DOM (selected item + qty per row) and computes real totals — used both for
+// the live preview while editing and for the actual stock deduction on submit, so what you see is what you get.
+function readCookRows(){
+  return [...document.querySelectorAll("#cook-rows > .cook-row")].map(rowEl => {
+    const itemId = rowEl.querySelector('[data-cook="item"]').value;
+    const qty = +rowEl.querySelector('[data-cook="qty"]').value || 0;
+    const item = itemId ? state.items.find(i=>i.id===itemId) : null;
+    return { item, qty };
+  });
+}
+function computeCookTotals(rows){
+  let kcal=0, protein=0, fat=0, carbs=0, counted=0;
+  rows.forEach(({item, qty}) => {
+    if(!item || !qty || item.kcal100==null) return;
+    const mult = isWeight(item.unit) ? qty/100 : qty;
+    kcal += item.kcal100*mult;
+    if(item.protein100!=null) protein += item.protein100*mult;
+    if(item.fat100!=null) fat += item.fat100*mult;
+    if(item.carbs100!=null) carbs += item.carbs100*mult;
+    counted++;
+  });
+  return { kcal, protein, fat, carbs, counted, total: rows.length };
+}
+function submitCook(){
+  const recipe = state.recipes.find(r=>r.id===ui.cookForm.recipeId);
+  if(!recipe) return;
+  const rows = readCookRows();
+  const servings = +document.getElementById("cook-servings").value || recipe.servings || 1;
+  const t = computeCookTotals(rows);
+
+  rows.forEach(({item, qty}) => {
+    if(!item || !qty) return;
+    const idx = state.items.findIndex(i=>i.id===item.id);
+    if(idx<0) return;
+    const newQty = +(state.items[idx].qty - qty).toFixed(1);
+    if(newQty<=0) state.items.splice(idx,1); else state.items[idx] = {...state.items[idx], qty:newQty};
+  });
+
+  const dish = {
+    id:uid(), type:"dish", name:recipe.name, qty:servings, unit:"порции",
+    expiry:addDays(recipe.shelfDays||3), location:"fridge", shelf:"Готовая еда",
+    kcal100: t.counted ? Math.round(t.kcal/servings) : (recipe.kcal100||null),
+    protein100: t.counted ? Math.round(t.protein/servings) : null,
+    fat100: t.counted ? Math.round(t.fat/servings) : null,
+    carbs100: t.counted ? Math.round(t.carbs/servings) : null,
+  };
+  state.items.push(dish);
+  ui.tab = "fridge"; ui.recipeOpen = null; ui.sheet = null; ui.cookForm = null;
+  persistAndRender();
+  showToast(t.counted===t.total && t.total>0
+    ? `«${recipe.name}» приготовлено — калорийность посчитана по реальным продуктам (${dish.kcal100} ккал/порция)`
+    : `«${recipe.name}» приготовлено и списано с полок`);
+}
+function addMissingToShopping(recipeId){
+  const recipe = state.recipes.find(r=>r.id===recipeId);
+  if(!recipe) return;
+  const status = recipeStatus(recipe);
+  const missing = status.details.filter(d=>d.status!=="ok");
+  missing.forEach(m => {
+    const existing = state.shopping.find(s => norm(s.name)===norm(m.name) && s.unit===m.unit && !s.bought);
+    const need = +Math.max(0, m.qty-(m.have||0)).toFixed(1) || m.qty;
+    if(existing) existing.qty = +(existing.qty+need).toFixed(1);
+    else state.shopping.push({ id:uid(), name:m.name, qty:need, unit:m.unit, bought:false });
+  });
+  persistAndRender();
+  showToast(missing.length ? `Добавлено в список покупок: ${missing.length}` : "Все ингредиенты уже есть в холодильнике");
+}
+function moveBoughtToFridge(){
+  const bought = state.shopping.filter(s=>s.bought);
+  if(!bought.length) return;
+  const fallbackShelf = state.shelves[state.shelves.length-1] || "Другое";
+  bought.forEach(b => state.items.push({ id:uid(), type:"ingredient", name:b.name, qty:b.qty, unit:b.unit, expiry:addDays(6), location:"fridge", shelf:fallbackShelf }));
+  state.shopping = state.shopping.filter(s=>!s.bought);
+  persistAndRender();
+}
+function generateWeekShopping(start){
+  const dates = weekDates(start);
+  const needed = {};
+  dates.forEach(d => {
+    const day = state.plan[d]; if(!day) return;
+    MEAL_SLOTS.forEach(slot => {
+      const rid = day[slot]; if(!rid) return;
+      const recipe = state.recipes.find(r=>r.id===rid); if(!recipe) return;
+      recipe.ingredients.forEach(ing => {
+        const key = norm(ing.name)+"|"+ing.unit;
+        needed[key] = needed[key] || { name:ing.name, unit:ing.unit, qty:0 };
+        needed[key].qty += ing.qty;
+      });
+    });
+  });
+  let added = 0;
+  Object.values(needed).forEach(n => {
+    const match = findMatch(n.name);
+    let remain = n.qty;
+    if(match && match.unit===n.unit) remain = Math.max(0, n.qty-match.qty);
+    if(remain>0){
+      added++;
+      const existing = state.shopping.find(s => norm(s.name)===norm(n.name) && s.unit===n.unit && !s.bought);
+      if(existing) existing.qty = +(existing.qty+remain).toFixed(1);
+      else state.shopping.push({ id:uid(), name:n.name, qty:+remain.toFixed(1), unit:n.unit, bought:false });
+    }
+  });
+  ui.tab = "shopping";
+  persistAndRender();
+  showToast(added ? `В список покупок добавлено позиций: ${added}` : "Все продукты для меню уже есть в холодильнике");
+}
+
+/* ================= render root ================= */
+
+function persistAndRender(){ saveState(); render(); }
+
+function showToast(msg){
+  ui.toast = msg;
+  render();
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => { ui.toast = null; render(); }, 2600);
+}
+
+function applyTheme(){
+  const html = document.documentElement;
+  html.dataset.accent = state.settings.accent;
+  if(state.settings.mode==="light") html.dataset.theme = "light";
+  else if(state.settings.mode==="dark") html.dataset.theme = "dark";
+  else html.removeAttribute("data-theme");
+}
+
+function render(){
+  applyTheme();
+  const root = document.getElementById("app");
+  root.innerHTML = `
+    ${renderHeader()}
+    <main>${renderTab()}</main>
+    ${renderNav()}
+    ${renderFab()}
+    ${ui.sheet ? renderSheet() : ""}
+    ${ui.toast ? `<div class="toast">${esc(ui.toast)}</div>` : ""}
+  `;
+  bindDynamicInputs();
+}
+
+function renderHeader(){
+  const d = new Date().toLocaleDateString("ru-RU",{day:"numeric",month:"long"});
+  return `
+  <header class="topbar">
+    <div class="brand">${icon("fridge",22)}<h1 class="display">Мой холодильник</h1></div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="date-tag mono">${esc(d)}</span>
+      <button class="icon-btn" data-action="open-settings" aria-label="Настройки">${icon("gear",18)}</button>
+    </div>
+  </header>`;
+}
+
+function renderNav(){
+  const tabs = [
+    { id:"fridge", label:"Холодильник", ic:"fridge" },
+    { id:"recipes", label:"Рецепты", ic:"book" },
+    { id:"plan", label:"Меню", ic:"calendar" },
+    { id:"shopping", label:"Покупки", ic:"cart", badge: state.shopping.filter(s=>!s.bought).length },
+  ];
+  return `<nav class="tabbar">${tabs.map(t => `
+    <button class="nav-btn ${ui.tab===t.id?'active':''}" data-action="set-tab" data-tab="${t.id}">
+      <div style="position:relative;">${icon(t.ic,19)}${t.badge?`<span class="nav-badge mono">${t.badge}</span>`:""}</div>
+      <span class="nav-label">${t.label}</span>
+    </button>`).join("")}</nav>`;
+}
+
+function renderFab(){
+  if(ui.sheet) return "";
+  if(ui.tab==="fridge") return `<button class="fab" aria-label="Добавить продукт" data-action="open-sheet" data-sheet="add-item">${icon("plus",22)}</button>`;
+  if(ui.tab==="recipes") return `<button class="fab" aria-label="Добавить рецепт" data-action="open-sheet" data-sheet="add-recipe">${icon("plus",22)}</button>`;
+  return "";
+}
+
+function renderTab(){
+  if(ui.tab==="fridge") return renderFridge();
+  if(ui.tab==="recipes") return renderRecipes();
+  if(ui.tab==="plan") return renderPlan();
+  if(ui.tab==="shopping") return renderShopping();
+  return "";
+}
+
+/* ================= fridge tab ================= */
+
+function renderFridge(){
+  const locItems = state.items.filter(i => (i.location||"fridge")===ui.loc);
+  const dishes = locItems.filter(i=>i.type==="dish").sort((a,b)=>(daysUntil(a.expiry)??999)-(daysUntil(b.expiry)??999));
+  const grouped = state.shelves.map(sh => ({
+    shelf: sh,
+    list: locItems.filter(i => i.type!=="dish" && (i.shelf||state.shelves[state.shelves.length-1])===sh).sort((a,b)=>(daysUntil(a.expiry)??999)-(daysUntil(b.expiry)??999)),
+  })).filter(g=>g.list.length>0);
+
+  let html = `
+  <div class="segment-row">
+    <button class="segment ${ui.loc==='fridge'?'active':''}" data-action="set-loc" data-loc="fridge">${icon("fridge",14)} Холодильник</button>
+    <button class="segment ${ui.loc==='freezer'?'active':''}" data-action="set-loc" data-loc="freezer">${icon("snow",14)} Морозилка</button>
+  </div>`;
+
+  if(dishes.length){
+    html += `<div class="section-label">Готовые блюда</div>`;
+    html += dishes.map(it => {
+      const d = daysUntil(it.expiry); const tone = expiryTone(d);
+      return `<div class="card" style="border-color:var(--primary);background:var(--primary-bg);">
+        <div style="flex:1;">
+          <div class="card-title">${esc(it.name)}</div>
+          <div class="card-meta mono">${it.qty} ${esc(it.unit)} · <span style="color:${tone.fg}">${expiryLabel(d)}</span></div>
+        </div>
+        <button class="round-btn" data-action="dish-eat" data-id="${it.id}">${icon("minus",16)}</button>
+        <span class="mono" style="font-size:13px;min-width:14px;text-align:center;">${it.qty}</span>
+        <button class="round-btn" style="background:transparent;color:var(--danger);" data-action="remove-item" data-id="${it.id}">${icon("trash",15)}</button>
+      </div>`;
+    }).join("");
+  }
+
+  if(!grouped.length && !dishes.length){
+    html += `<div class="empty">${ui.loc==='fridge' ? "Пусто. Добавьте, что у вас есть сейчас — и рецепты начнут подбираться сами." : "В морозилке пока ничего не отмечено."}</div>`;
+  }
+
+  grouped.forEach(g => {
+    html += `<div class="section-label">${esc(g.shelf)}</div>`;
+    html += g.list.map(it => {
+      const d = daysUntil(it.expiry); const tone = expiryTone(d); const urgent = d!==null && d<=2; const kcal = itemKcal(it);
+      return `<div class="card ${urgent?'urgent':''}" style="${urgent?`box-shadow:0 0 0 1.5px ${tone.fg};`:''}">
+        <div class="tag mono" style="background:${tone.bg};color:${tone.fg};border-color:${tone.fg};">${d===null?"—":d<0?"просрочен":d===0?"сегодня":`${d} дн`}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="card-title">${esc(it.name)}${it.brand?` <span style="font-weight:400;color:var(--muted);font-size:0.85em;">· ${esc(it.brand)}</span>`:""}</div>
+          <div class="card-meta mono">${it.qty} ${esc(it.unit)}${kcal!==null?` · ≈${kcal} ккал`:""}${it.price?` · ${it.price}€${it.store?" ("+esc(it.store)+")":""}`:""}</div>
+        </div>
+        <button class="round-btn" style="background:transparent;color:var(--muted);" data-action="remove-item" data-id="${it.id}">${icon("trash",15)}</button>
+      </div>`;
+    }).join("");
+  });
+
+  return html;
+}
+
+/* ================= recipes tab ================= */
+
+function sortedRecipes(){
+  let list = state.recipes.map(r => ({ r, s:recipeStatus(r) }));
+  if(ui.recipeCat!=="Все") list = list.filter(x=>x.r.category===ui.recipeCat);
+  if(ui.recipeSort==="ready") list.sort((a,b)=> (b.s.total? b.s.ok/b.s.total:0) - (a.s.total? a.s.ok/a.s.total:0));
+  if(ui.recipeSort==="time") list.sort((a,b)=> parseInt(a.r.time)-parseInt(b.r.time));
+  if(ui.recipeSort==="kcal") list.sort((a,b)=> (a.r.kcal100||0)-(b.r.kcal100||0));
+  return list;
+}
+
+function renderRecipes(){
+  let html = `<div class="chips-row">${CATEGORIES.map(c=>`<button class="chip ${ui.recipeCat===c?'active':''}" data-action="set-recipe-cat" data-cat="${esc(c)}">${esc(c)}</button>`).join("")}</div>`;
+  html += `<div class="chips-row">${[["ready","по готовности"],["time","по времени"],["kcal","по калориям"]].map(([k,l])=>`<button class="chip ${ui.recipeSort===k?'active':''}" data-action="set-recipe-sort" data-sort="${k}">${l}</button>`).join("")}</div>`;
+
+  const list = sortedRecipes();
+  if(!list.length) html += `<div class="empty">В этой категории пока нет рецептов.</div>`;
+
+  html += list.map(({r,s}) => {
+    const open = ui.recipeOpen===r.id;
+    let body = "";
+    if(open){
+      const real = recipeRealNutrition(r);
+      body = `<div class="recipe-body">
+        <div class="f-label" style="margin:12px 0 -2px;">По рецепту (среднее, на 100г)</div>
+        <div class="macro-row mono">
+          <div class="macro-pill"><b>${r.protein??"—"}</b> Б</div><div class="macro-pill"><b>${r.fat??"—"}</b> Ж</div><div class="macro-pill"><b>${r.carbs??"—"}</b> У</div>
+          <div class="macro-pill">${r.kcal100??"—"} ккал/100г</div>
+        </div>
+        ${real ? `
+        <div class="f-label" style="margin:10px 0 -2px;">Прикидка по вашим продуктам (на порцию)</div>
+        <div class="macro-row mono">
+          <div class="macro-pill" style="background:var(--fresh-bg);color:var(--fresh);"><b>${real.proteinPerServing}</b> Б</div>
+          <div class="macro-pill" style="background:var(--fresh-bg);color:var(--fresh);"><b>${real.fatPerServing}</b> Ж</div>
+          <div class="macro-pill" style="background:var(--fresh-bg);color:var(--fresh);"><b>${real.carbsPerServing}</b> У</div>
+          <div class="macro-pill" style="background:var(--fresh-bg);color:var(--fresh);">${real.kcalPerServing} ккал/порция</div>
+        </div>
+        <p class="hint" style="margin:-4px 0 4px;">${real.matched===real.total ? `По всем ${real.total} ингредиентам.` : `Не учтено: ${real.missing.map(esc).join(", ")}.`} Точный расчёт — по нажатию «Приготовила»: там можно выбрать конкретную пачку продукта и её реальный вес.</p>
+        ` : `<p class="hint" style="margin:6px 0 4px;">Точная калорийность считается при готовке — нажмите «Приготовила», чтобы выбрать конкретные продукты и их вес.</p>`}
+        <div>${s.details.map(d => `<div class="ing-row">
+            <span class="dot" style="background:${d.status==='ok'?'var(--fresh)':d.status==='low'?'var(--warn)':'var(--danger)'}"></span>
+            <span style="flex:1;">${esc(d.name)}</span>
+            <span class="mono" style="font-size:12px;color:var(--muted);">${d.qty}${esc(d.unit)}</span>
+          </div>`).join("")}
+        </div>
+        <p class="steps">${esc(r.steps)}</p>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn-primary" style="width:auto;flex:1;padding:11px 0;" data-action="open-cook" data-id="${r.id}">Приготовила ✓</button>
+          <button class="btn-secondary" style="width:auto;flex:1;margin-bottom:0;padding:9px 0;" data-action="add-missing" data-id="${r.id}">В список покупок</button>
+        </div>
+        <button class="btn-ghost" data-action="delete-recipe" data-id="${r.id}">Удалить рецепт</button>
+      </div>`;
+    }
+    return `<div class="recipe-card">
+      <div class="recipe-top" role="button" tabindex="0" data-action="toggle-recipe" data-id="${r.id}">
+        <div style="flex:1;min-width:0;">
+          <div class="card-title">${esc(r.name)}</div>
+          <div class="card-meta mono">${esc(r.category)} · ${r.kcal100??"—"} ккал/100г · ${esc(r.time||"—")}</div>
+        </div>
+        ${s.ready ? `<div class="stamp">можно готовить</div>` : `<div class="stamp-muted mono">${s.ok}/${s.total} есть</div>`}
+      </div>
+      ${body}
+    </div>`;
+  }).join("");
+
+  return html;
+}
+
+/* ================= plan tab ================= */
+
+function renderPlan(){
+  const dates = weekDates(ui.weekStart);
+  const recipesByCat = (cat) => state.recipes.filter(r => r.category===cat || (cat==="Обед" && r.category==="Салат"));
+  let html = `<div class="week-nav">
+    <button class="week-btn" data-action="week-shift" data-dir="-1">${icon("arrowLeft",14)}</button>
+    <span class="mono" style="font-size:12.5px;">${new Date(dates[0]).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})} – ${new Date(dates[6]).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})}</span>
+    <button class="week-btn" data-action="week-shift" data-dir="1">${icon("arrowRight",14)}</button>
+  </div>`;
+
+  dates.forEach((date,i) => {
+    html += `<div class="day-block"><div class="day-label">${WEEKDAYS[i]} · ${new Date(date).getDate()}</div>`;
+    MEAL_SLOTS.forEach(slot => {
+      const val = (state.plan[date] && state.plan[date][slot]) || "";
+      html += `<div class="slot-row">
+        <span class="slot-label">${slot}</span>
+        <select class="f" style="margin:0;padding:7px 8px;font-size:13px;" data-action="set-slot" data-date="${date}" data-slot="${slot}">
+          <option value="">—</option>
+          ${recipesByCat(slot).map(r=>`<option value="${r.id}" ${val===r.id?'selected':''}>${esc(r.name)}</option>`).join("")}
+        </select>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+
+  html += `<p class="hint">Список покупок соберётся сразу на всю неделю (минус то, что уже есть в холодильнике) — не придётся ходить в магазин каждый день.</p>
+  <button class="btn-primary" data-action="generate-week-shopping">Собрать список покупок на неделю</button>`;
+  return html;
+}
+
+/* ================= shopping tab ================= */
+
+function renderShopping(){
+  const boughtCount = state.shopping.filter(s=>s.bought).length;
+  const todo = state.shopping.filter(s=>!s.bought);
+  const done = state.shopping.filter(s=>s.bought);
+
+  let html = `
+  <div class="row-gap" style="margin-bottom:12px;">
+    <input class="f flex1" style="margin-bottom:0;" id="shop-name" placeholder="Что купить">
+    <input class="f" style="margin-bottom:0;width:70px;" id="shop-qty" placeholder="кол-во" type="number">
+    <select class="f" style="margin-bottom:0;width:84px;" id="shop-unit">${UNITS.map(u=>`<option ${u==='г'?'selected':''}>${u}</option>`).join("")}</select>
+  </div>
+  <button class="btn-primary" style="margin-bottom:16px;" data-action="shopping-add">Добавить в список</button>`;
+
+  if(!state.shopping.length) html += `<div class="empty">Список пуст. Откройте рецепт и нажмите «В список покупок», или соберите список на неделю во вкладке «Меню».</div>`;
+
+  html += todo.map(s => `<div class="card clickable" role="button" tabindex="0" data-action="shopping-toggle" data-id="${s.id}">
+    <div class="checkbox"></div>
+    <div style="flex:1;"><div class="card-title">${esc(s.name)}</div><div class="card-meta mono">${s.qty} ${esc(s.unit)}</div></div>
+    <button class="round-btn" style="background:transparent;color:var(--muted);" data-action="shopping-remove" data-id="${s.id}">${icon("trash",15)}</button>
+  </div>`).join("");
+
+  if(done.length){
+    html += `<div class="section-label">Куплено</div>`;
+    html += done.map(s => `<div class="card clickable" role="button" tabindex="0" style="opacity:.55;" data-action="shopping-toggle" data-id="${s.id}">
+      <div class="checkbox checked">${icon("check",12)}</div>
+      <div style="flex:1;text-decoration:line-through;"><div class="card-title">${esc(s.name)}</div></div>
+      <button class="round-btn" style="background:transparent;color:var(--muted);" data-action="shopping-remove" data-id="${s.id}">${icon("trash",15)}</button>
+    </div>`).join("");
+    html += `<button class="btn-primary" style="margin-top:8px;" data-action="shopping-move-fridge">Перенести ${boughtCount} куплен${boughtCount===1?'ный':'ных'} в холодильник</button>`;
+  }
+  return html;
+}
+
+/* ================= sheets (add item / add recipe) ================= */
+
+function renderSheet(){
+  if(ui.sheet==="add-item") return renderAddItemSheet();
+  if(ui.sheet==="add-recipe") return renderAddRecipeSheet();
+  if(ui.sheet==="cook-recipe") return renderCookSheet();
+  return "";
+}
+
+function renderCookSheet(){
+  const recipe = state.recipes.find(r=>r.id===ui.cookForm.recipeId);
+  if(!recipe) return "";
+  const rowsHtml = ui.cookForm.rows.map((row, i) => {
+    const candidates = candidateItemsFor(row.name);
+    const selected = candidates.find(c=>c.id===row.selectedItemId) || null;
+    const unit = selected ? selected.unit : "";
+    return `<div class="cook-row" style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);">
+      <div style="font-size:13.5px;font-weight:600;margin-bottom:2px;">${esc(row.name)}</div>
+      <div class="hint" style="margin:0 0 6px;">по рецепту: ${recipe.ingredients[i].qty}${esc(recipe.ingredients[i].unit)}</div>
+      <div class="row-gap">
+        <select class="f flex1" style="margin-bottom:0;" data-cook="item" data-row="${i}">
+          <option value="">— не использую —</option>
+          ${candidates.map(c => `<option value="${c.id}" ${c.id===row.selectedItemId?'selected':''}>${esc(c.name)}${c.brand?` (${esc(c.brand)})`:""} · ${c.qty}${esc(c.unit)} в наличии${c.kcal100!=null?` · ${c.kcal100} ккал/100${isWeight(c.unit)?'г/мл':' шт'}`:""}</option>`).join("")}
+        </select>
+        <input class="f" style="margin-bottom:0;width:70px;" type="number" step="any" data-cook="qty" data-row="${i}" value="${row.qty}" placeholder="кол-во">
+        <span class="mono" data-cook="unit" data-row="${i}" style="width:36px;flex-shrink:0;align-self:center;font-size:12.5px;color:var(--muted);">${esc(unit)}</span>
+      </div>
+      ${!candidates.length ? `<p class="hint" style="margin:4px 0 0;">Нет такого продукта в холодильнике — калории по нему не учтутся.</p>` : ""}
+    </div>`;
+  }).join("");
+
+  return `<div class="sheet-overlay" data-action="close-sheet"></div>
+  <div class="sheet">
+    <div class="sheet-header"><span class="sheet-title display">Готовим: ${esc(recipe.name)}</span>
+      <button class="icon-btn" data-action="close-sheet">${icon("x",18)}</button></div>
+    <p class="hint" style="margin-top:0;">Для каждого продукта выберите конкретную пачку из холодильника и впишите, сколько грамм/штук реально взяли — калорийность посчитается по этой пачке, а не по рецепту.</p>
+    <div id="cook-rows">${rowsHtml}</div>
+    <label class="f-label">Готовых порций получилось</label>
+    <input class="f" id="cook-servings" type="number" value="${ui.cookForm.servings}">
+    <div id="cook-totals" class="hint mono" style="margin:6px 0 14px;"></div>
+    <button class="btn-primary" data-action="submit-cook">Готово — списать и добавить в холодильник</button>
+  </div>`;
+}
+function recalcCookTotals(){
+  const box = document.getElementById("cook-totals");
+  const servingsInput = document.getElementById("cook-servings");
+  if(!box || !servingsInput) return;
+  const rows = readCookRows();
+  const t = computeCookTotals(rows);
+  const servings = +servingsInput.value || 1;
+  if(t.counted===0){
+    box.textContent = "Пока не выбрано ни одного продукта с известной калорийностью.";
+    return;
+  }
+  const perServing = Math.round(t.kcal/servings);
+  box.textContent = `Известно по ${t.counted} из ${t.total} · всего ≈${Math.round(t.kcal)} ккал · ${perServing} ккал на порцию`;
+}
+
+function renderAddItemSheet(){
+  const s = ui.itemForm || (ui.itemForm = { openExtra:false });
+  return `<div class="sheet-overlay" data-action="close-sheet"></div>
+  <div class="sheet">
+    <div class="sheet-header"><span class="sheet-title display">Новый продукт (${ui.loc==='freezer'?'морозилка':'холодильник'})</span>
+      <button class="icon-btn" data-action="close-sheet">${icon("x",18)}</button></div>
+    <input class="f" id="new-name" placeholder="Название (напр. куриное филе)">
+    <div class="row-gap">
+      <input class="f flex1" id="new-qty" placeholder="Кол-во" type="number">
+      <select class="f flex1" id="new-unit">${UNITS.filter(u=>u!=='порции').map(u=>`<option>${u}</option>`).join("")}</select>
+    </div>
+    <label class="f-label">Полка</label>
+    <select class="f" id="new-shelf">${state.shelves.map(sh=>`<option>${esc(sh)}</option>`).join("")}</select>
+    <label class="f-label">Годен до</label>
+    <input class="f" id="new-expiry" type="date" value="${addDays(5)}">
+    <button class="link-row" data-action="toggle-extra">${icon(s.openExtra?"chevUp":"chevDown",14)} марка, калорийность и цена (необязательно)</button>
+    <div id="extra-fields" style="display:${s.openExtra?'block':'none'};">
+      <input class="f" id="new-brand" placeholder="Марка (напр. Простоквашино)">
+      <label class="f-label">На 100г/мл (или на 1 шт, если единица — шт)</label>
+      <div class="row-gap">
+        <input class="f flex1" id="new-kcal" type="number" placeholder="ккал">
+        <input class="f flex1" id="new-protein" type="number" placeholder="белки, г">
+      </div>
+      <div class="row-gap">
+        <input class="f flex1" id="new-fat" type="number" placeholder="жиры, г">
+        <input class="f flex1" id="new-carbs" type="number" placeholder="углеводы, г">
+      </div>
+      <p class="hint" style="margin:-6px 0 10px;">Эти данные приложение запомнит по названию продукта — пригодятся для расчёта реальной калорийности рецептов.</p>
+      <div class="row-gap">
+        <input class="f flex1" id="new-price" placeholder="Цена, €" type="number">
+        <input class="f flex1" id="new-store" placeholder="Магазин">
+      </div>
+      <div id="price-hint" class="hint" style="margin:-6px 0 10px;"></div>
+    </div>
+    <button class="btn-primary" data-action="submit-item">Добавить</button>
+  </div>`;
+}
+
+function renderAddRecipeSheet(){
+  const s = ui.recipeForm || (ui.recipeForm = { ingCount:1 });
+  let ingRows = "";
+  for(let i=0;i<s.ingCount;i++){
+    ingRows += `<div class="row-gap" style="margin-bottom:6px;">
+      <input class="f flex1" style="margin-bottom:0;flex:2;" data-ing="name" placeholder="продукт">
+      <input class="f" style="margin-bottom:0;width:64px;" data-ing="qty" placeholder="кол-во" type="number">
+      <select class="f" style="margin-bottom:0;width:84px;" data-ing="unit">${UNITS.filter(u=>u!=='порции').map(u=>`<option>${u}</option>`).join("")}</select>
+    </div>`;
+  }
+  return `<div class="sheet-overlay" data-action="close-sheet"></div>
+  <div class="sheet">
+    <div class="sheet-header"><span class="sheet-title display">Новый рецепт</span>
+      <button class="icon-btn" data-action="close-sheet">${icon("x",18)}</button></div>
+    <input class="f" id="r-name" placeholder="Название блюда">
+    <div class="row-gap">
+      <select class="f flex1" id="r-cat">${CATEGORIES.filter(c=>c!=='Все').map(c=>`<option>${c}</option>`).join("")}</select>
+      <input class="f flex1" id="r-kcal" placeholder="Ккал/100г" type="number">
+    </div>
+    <div class="row-gap">
+      <input class="f flex1" id="r-time" placeholder="Время (напр. 30 мин)">
+      <input class="f flex1" id="r-servings" placeholder="Порций" type="number" value="4">
+    </div>
+    <label class="f-label">Ингредиенты</label>
+    <div id="ing-rows">${ingRows}</div>
+    <button class="btn-secondary" data-action="add-ing-row">+ ингредиент</button>
+    <label class="f-label">Как готовить</label>
+    <textarea class="f" id="r-steps" style="min-height:70px;"></textarea>
+    <button class="btn-primary" data-action="submit-recipe">Сохранить рецепт</button>
+  </div>`;
+}
+
+/* ================= settings ================= */
+
+function renderSettingsSheet(){
+  return `<div class="sheet-overlay" data-action="close-settings"></div>
+  <div class="sheet">
+    <div class="sheet-header"><span class="sheet-title display">Настройки</span>
+      <button class="icon-btn" data-action="close-settings">${icon("x",18)}</button></div>
+    <div class="settings-row" role="button" tabindex="0" data-action="settings-open" data-view="shelves">
+      <div><div class="settings-row-label">Полки холодильника</div><div class="settings-row-sub">${state.shelves.length} полок · порядок и названия</div></div>
+      ${icon("chevRight",18)}
+    </div>
+    <div class="settings-row" role="button" tabindex="0" data-action="settings-open" data-view="theme">
+      <div><div class="settings-row-label">Внешний вид</div><div class="settings-row-sub">${MODES.find(m=>m.id===state.settings.mode)?.name} · ${ACCENTS.find(a=>a.id===state.settings.accent)?.name}</div></div>
+      ${icon("chevRight",18)}
+    </div>
+    <div class="settings-row" role="button" tabindex="0" data-action="settings-open" data-view="backup">
+      <div><div class="settings-row-label">Резервная копия</div><div class="settings-row-sub">Сохранить или восстановить все данные</div></div>
+      ${icon("chevRight",18)}
+    </div>
+    <div class="settings-row" role="button" tabindex="0" data-action="open-instructions">
+      <div><div class="settings-row-label">Как пользоваться</div><div class="settings-row-sub">Краткая инструкция</div></div>
+      ${icon("chevRight",18)}
+    </div>
+  </div>`;
+}
+
+function renderShelvesSheet(){
+  const list = state.shelves;
+  return `<div class="sheet-overlay" data-action="close-settings"></div>
+  <div class="sheet">
+    <div class="sheet-header">
+      <button class="icon-btn" data-action="settings-back">${icon("arrowLeft",18)}</button>
+      <span class="sheet-title display">Полки</span>
+      <button class="icon-btn" data-action="close-settings">${icon("x",18)}</button>
+    </div>
+    <p class="hint" style="margin-top:0;">Переименуйте, удалите или переставьте полки — список в холодильнике перестроится сам. Последняя полка используется как запасная для новых продуктов.</p>
+    ${list.map((sh,i) => `<div class="shelf-row">
+      <input value="${esc(sh)}" data-shelf-index="${i}" data-action-blur="rename-shelf">
+      <button class="tiny-btn" data-action="shelf-move" data-dir="-1" data-index="${i}" ${i===0?'disabled':''}>${icon("up",13)}</button>
+      <button class="tiny-btn" data-action="shelf-move" data-dir="1" data-index="${i}" ${i===list.length-1?'disabled':''}>${icon("down",13)}</button>
+      <button class="tiny-btn" data-action="shelf-delete" data-index="${i}" ${list.length<=1?'disabled':''}>${icon("trash",13)}</button>
+    </div>`).join("")}
+    <div class="row-gap" style="margin-top:10px;">
+      <input class="f flex1" id="new-shelf-name" placeholder="Новая полка" style="margin-bottom:0;">
+      <button class="icon-btn" style="background:var(--primary);color:#fff;border-color:var(--primary);" data-action="shelf-add">${icon("plus",18)}</button>
+    </div>
+  </div>`;
+}
+
+function renderThemeSheet(){
+  return `<div class="sheet-overlay" data-action="close-settings"></div>
+  <div class="sheet">
+    <div class="sheet-header">
+      <button class="icon-btn" data-action="settings-back">${icon("arrowLeft",18)}</button>
+      <span class="sheet-title display">Внешний вид</span>
+      <button class="icon-btn" data-action="close-settings">${icon("x",18)}</button>
+    </div>
+    <div class="section-label" style="margin-top:0;">Режим</div>
+    <div class="segment-row" style="margin-top:0;">
+      ${MODES.map(m => `<button class="segment ${state.settings.mode===m.id?'active':''}" data-action="set-mode" data-mode="${m.id}">${m.name}</button>`).join("")}
+    </div>
+    <p class="hint" style="margin-top:-6px;">«Системная» подстраивается под тему устройства и переключается вместе с ней.</p>
+    <div class="section-label">Цвет</div>
+    <div class="swatch-row">
+      ${ACCENTS.map(a => `<div class="swatch ${state.settings.accent===a.id?'active':''}" role="button" tabindex="0" style="--pswatch:${a.dot};" data-action="set-accent" data-accent="${a.id}">
+        <div class="swatch-dot" style="background:${a.dot};"></div>
+        <div class="swatch-name">${a.name}</div>
+      </div>`).join("")}
+    </div>
+    <p class="hint">Бирки сроков годности всегда остаются зелёными/жёлтыми/красными — это не меняется цветом темы.</p>
+  </div>`;
+}
+
+function renderBackupSheet(){
+  return `<div class="sheet-overlay" data-action="close-settings"></div>
+  <div class="sheet">
+    <div class="sheet-header">
+      <button class="icon-btn" data-action="settings-back">${icon("arrowLeft",18)}</button>
+      <span class="sheet-title display">Резервная копия</span>
+      <button class="icon-btn" data-action="close-settings">${icon("x",18)}</button>
+    </div>
+    <div class="section-label" style="margin-top:0;">Сохранить</div>
+    <p class="hint" style="margin-top:0;">Скачает файл .json со всеми продуктами, рецептами, списком покупок и меню. Храните его — из него можно всё восстановить.</p>
+    <button class="btn-primary" data-action="backup-export">${icon("download",16)} <span style="margin-left:6px;">Скачать резервную копию</span></button>
+    <div class="section-label">Восстановить</div>
+    <p class="hint" style="margin-top:0;">Откройте .json-файл резервной копии в любом текстовом редакторе, скопируйте содержимое целиком и вставьте сюда.</p>
+    <textarea class="f" id="restore-text" style="min-height:90px;" placeholder="Вставьте содержимое файла резервной копии..."></textarea>
+    <button class="btn-secondary" data-action="backup-import">${icon("upload",16)} <span style="margin-left:6px;">Восстановить из копии</span></button>
+    <div id="backup-fallback"></div>
+  </div>`;
+}
+
+function renderInstructionsModal(){
+  return `<div class="modal-overlay">
+    <div class="modal">
+      <h2 class="display">Как пользоваться</h2>
+      <p class="hint" style="margin:0 0 4px;">Коротко — что где находится.</p>
+      <div class="guide-block"><h3>${icon("fridge",14)} Холодильник</h3><p>Добавляйте продукты кнопкой «+». У каждого — полка, срок годности и (опционально) калорийность и цена. Продукты с истекающим сроком (≤2 дня) подсвечиваются жёлтым/красным и поднимаются наверх своей полки. Переключатель сверху — холодильник или морозилка.</p></div>
+      <div class="guide-block"><h3>${icon("book",14)} Рецепты</h3><p>У каждого рецепта — метка «можно готовить» или «X/Y есть», в зависимости от того, что лежит в холодильнике. Откройте рецепт, чтобы увидеть состав и способ приготовления. Кнопка «Приготовила ✓» открывает экран, где для каждого продукта можно выбрать конкретную пачку из холодильника и вписать её реальный вес — калорийность блюда посчитается именно по ним, а не по усреднённым цифрам рецепта. Выбранное спишется с полок, а готовое блюдо появится в холодильнике со своим сроком хранения.</p></div>
+      <div class="guide-block"><h3>${icon("calendar",14)} Меню</h3><p>Планируйте завтрак/обед/ужин на неделю вперёд, выбирая рецепты в ячейках. Кнопка «Собрать список покупок на неделю» посчитает, каких продуктов не хватает — с учётом того, что уже есть дома.</p></div>
+      <div class="guide-block"><h3>${icon("cart",14)} Покупки</h3><p>Добавляйте вручную или из рецепта («В список покупок»). Отмечайте купленное галочкой и переносите одной кнопкой в холодильник.</p></div>
+      <div class="guide-block"><h3>${icon("gear",14)} Настройки</h3><p>Здесь можно переименовать или переставить полки холодильника под себя, выбрать светлую/тёмную/системную тему и акцентный цвет, а также сохранить или восстановить резервную копию всех данных.</p></div>
+      <button class="btn-primary" style="margin-top:8px;" data-action="close-instructions">Понятно, начать</button>
+    </div>
+  </div>`;
+}
+
+/* ================= dynamic bindings that need real DOM elements ================= */
+
+function bindDynamicInputs(){
+  const kcalInput = document.getElementById("new-kcal");
+  if(kcalInput){
+    const priceHint = document.getElementById("price-hint");
+    const nameInput = document.getElementById("new-name");
+    const updateHint = () => {
+      const nm = nameInput.value.trim();
+      if(!nm || !priceHint) return;
+      const facts = state.productFacts[norm(nm)];
+      if(!facts){ priceHint.textContent = ""; return; }
+      const parts = [];
+      if(facts.price!=null) parts.push(`в последний раз покупали за ${facts.price}€${facts.store?` в ${facts.store}`:""}`);
+      if(facts.kcal100!=null) parts.push(`известна калорийность: ${facts.kcal100} ккал/100${isWeight(facts.unit)?"г/мл":" шт"}`);
+      priceHint.textContent = parts.length ? parts.join(" · ") : "";
+    };
+    nameInput.addEventListener("blur", updateHint);
+  }
+
+  const cookRows = document.getElementById("cook-rows");
+  if(cookRows){
+    cookRows.querySelectorAll('[data-cook="item"]').forEach(sel => {
+      sel.addEventListener("change", () => {
+        const row = sel.closest(".cook-row");
+        const unitSpan = row.querySelector('[data-cook="unit"]');
+        const qtyInput = row.querySelector('[data-cook="qty"]');
+        const item = sel.value ? state.items.find(i=>i.id===sel.value) : null;
+        unitSpan.textContent = item ? item.unit : "";
+        if(item && !qtyInput.value){
+          const i = +sel.dataset.row;
+          const ing = state.recipes.find(r=>r.id===ui.cookForm.recipeId).ingredients[i];
+          qtyInput.value = item.unit===ing.unit ? ing.qty : "";
+        }
+        recalcCookTotals();
+      });
+    });
+    cookRows.querySelectorAll('[data-cook="qty"]').forEach(inp => inp.addEventListener("input", recalcCookTotals));
+    const servingsInput = document.getElementById("cook-servings");
+    if(servingsInput) servingsInput.addEventListener("input", recalcCookTotals);
+    recalcCookTotals();
+  }
+}
+
+/* ================= event delegation ================= */
+
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-action]");
+  if(!t) return;
+  const action = t.dataset.action;
+
+  if(action==="set-tab"){ ui.tab=t.dataset.tab; ui.recipeOpen=null; render(); return; }
+  if(action==="set-loc"){ ui.loc=t.dataset.loc; render(); return; }
+  if(action==="open-sheet"){ ui.sheet=t.dataset.sheet; if(ui.sheet==='add-item') ui.itemForm={openExtra:false}; if(ui.sheet==='add-recipe') ui.recipeForm={ingCount:1}; render(); return; }
+  if(action==="close-sheet"){ ui.sheet=null; render(); return; }
+  if(action==="toggle-extra"){ ui.itemForm.openExtra = !ui.itemForm.openExtra; render(); return; }
+
+  if(action==="submit-item"){
+    const name = document.getElementById("new-name").value.trim();
+    const qty = +document.getElementById("new-qty").value;
+    if(!name || !qty) return;
+    const kcalVal = document.getElementById("new-kcal").value;
+    const proteinVal = document.getElementById("new-protein").value;
+    const fatVal = document.getElementById("new-fat").value;
+    const carbsVal = document.getElementById("new-carbs").value;
+    const priceVal = document.getElementById("new-price").value;
+    const storeVal = document.getElementById("new-store").value.trim();
+    const brandVal = document.getElementById("new-brand").value.trim();
+    const newItem = {
+      id:uid(), type:"ingredient", name, qty, unit:document.getElementById("new-unit").value,
+      expiry:document.getElementById("new-expiry").value, shelf:document.getElementById("new-shelf").value, location:ui.loc,
+      kcal100: kcalVal ? +kcalVal : null, protein100: proteinVal ? +proteinVal : null, fat100: fatVal ? +fatVal : null, carbs100: carbsVal ? +carbsVal : null,
+      price: priceVal ? +priceVal : null, store: storeVal || null, brand: brandVal || null,
+    };
+    state.items.push(newItem);
+    recordProductFacts(newItem);
+    ui.sheet=null; persistAndRender(); return;
+  }
+
+  if(action==="dish-eat"){ const it=state.items.find(i=>i.id===t.dataset.id); if(it){ it.qty=Math.max(0,+(it.qty-1).toFixed(1)); if(it.qty<=0) state.items=state.items.filter(i=>i.id!==it.id); persistAndRender(); } return; }
+  if(action==="remove-item"){ state.items = state.items.filter(i=>i.id!==t.dataset.id); persistAndRender(); return; }
+
+  if(action==="set-recipe-cat"){ ui.recipeCat=t.dataset.cat; render(); return; }
+  if(action==="set-recipe-sort"){ ui.recipeSort=t.dataset.sort; render(); return; }
+  if(action==="toggle-recipe"){ ui.recipeOpen = ui.recipeOpen===t.dataset.id ? null : t.dataset.id; render(); return; }
+  if(action==="open-cook"){ openCookSheet(t.dataset.id); return; }
+  if(action==="submit-cook"){ submitCook(); return; }
+  if(action==="add-missing"){ addMissingToShopping(t.dataset.id); return; }
+  if(action==="delete-recipe"){ if(confirm("Удалить этот рецепт?")){ state.recipes = state.recipes.filter(r=>r.id!==t.dataset.id); ui.recipeOpen=null; persistAndRender(); } return; }
+
+  if(action==="add-ing-row"){ ui.recipeForm.ingCount++; render(); return; }
+  if(action==="submit-recipe"){
+    const name = document.getElementById("r-name").value.trim();
+    if(!name) return;
+    const rows = [...document.querySelectorAll("#ing-rows > div")];
+    const ingredients = rows.map(row => ({
+      name: row.querySelector('[data-ing="name"]').value.trim(),
+      qty: +row.querySelector('[data-ing="qty"]').value || 1,
+      unit: row.querySelector('[data-ing="unit"]').value,
+    })).filter(i=>i.name);
+    state.recipes.push({
+      id:uid(), name, category:document.getElementById("r-cat").value, kcal100:+document.getElementById("r-kcal").value||null,
+      protein:null, fat:null, carbs:null, time:document.getElementById("r-time").value||"—",
+      servings:+document.getElementById("r-servings").value||1, shelfDays:4,
+      steps:document.getElementById("r-steps").value, ingredients,
+    });
+    ui.sheet=null; persistAndRender(); return;
+  }
+
+  if(action==="week-shift"){ ui.weekStart = addDays(7*(+t.dataset.dir), ui.weekStart); render(); return; }
+  if(action==="generate-week-shopping"){ generateWeekShopping(ui.weekStart); return; }
+
+  if(action==="shopping-add"){
+    const name = document.getElementById("shop-name").value.trim(); if(!name) return;
+    state.shopping.push({ id:uid(), name, qty:+document.getElementById("shop-qty").value||1, unit:document.getElementById("shop-unit").value, bought:false });
+    persistAndRender(); return;
+  }
+  if(action==="shopping-toggle"){ const s=state.shopping.find(x=>x.id===t.dataset.id); if(s) s.bought=!s.bought; persistAndRender(); return; }
+  if(action==="shopping-remove"){ state.shopping = state.shopping.filter(s=>s.id!==t.dataset.id); persistAndRender(); return; }
+  if(action==="shopping-move-fridge"){ moveBoughtToFridge(); return; }
+
+  if(action==="open-settings"){ ui.settingsView="root"; render(); return; }
+  if(action==="close-settings"){ ui.settingsView=null; render(); return; }
+  if(action==="settings-back"){ ui.settingsView="root"; render(); return; }
+  if(action==="settings-open"){ ui.settingsView=t.dataset.view; render(); return; }
+  if(action==="open-instructions"){ ui.settingsView=null; ui.showInstructions=true; render(); return; }
+  if(action==="close-instructions"){ ui.showInstructions=false; if(!state.settings.seenIntro){ state.settings.seenIntro=true; saveState(); } render(); return; }
+
+  if(action==="shelf-move"){
+    const i = +t.dataset.index, dir=+t.dataset.dir, j=i+dir;
+    if(j<0||j>=state.shelves.length) return;
+    [state.shelves[i], state.shelves[j]] = [state.shelves[j], state.shelves[i]];
+    saveState(); render(); return;
+  }
+  if(action==="shelf-delete"){
+    if(state.shelves.length<=1) return;
+    const i = +t.dataset.index; const removed = state.shelves[i];
+    state.shelves.splice(i,1);
+    const fallback = state.shelves[state.shelves.length-1];
+    state.items.forEach(it => { if(it.shelf===removed) it.shelf=fallback; });
+    saveState(); render(); return;
+  }
+  if(action==="shelf-add"){
+    const input = document.getElementById("new-shelf-name");
+    const val = input.value.trim(); if(!val) return;
+    state.shelves.push(val); saveState(); render(); return;
+  }
+  if(action==="set-accent"){ state.settings.accent=t.dataset.accent; saveState(); render(); return; }
+  if(action==="set-mode"){ state.settings.mode=t.dataset.mode; saveState(); render(); return; }
+
+  if(action==="backup-export"){ doBackupExport(); return; }
+  if(action==="backup-import"){ doBackupImport(); return; }
+});
+
+document.addEventListener("keydown", (e) => {
+  if(e.key!=="Enter" && e.key!==" ") return;
+  const t = e.target.closest('[role="button"][data-action]');
+  if(!t) return;
+  e.preventDefault();
+  t.click();
+});
+
+document.addEventListener("focusout", (e) => {
+  const t = e.target;
+  if(t.dataset && t.dataset.actionBlur==="rename-shelf"){
+    const i = +t.dataset.shelfIndex;
+    const oldName = state.shelves[i];
+    const newName = t.value.trim();
+    if(newName && newName!==oldName){
+      state.shelves[i]=newName;
+      state.items.forEach(it => { if(it.shelf===oldName) it.shelf=newName; });
+      saveState();
+    }
+  }
+});
+
+/* patch render() to also show instructions modal flag + settings overlay after navigation */
+const _origRender = render;
+render = function(){
+  _origRender();
+  if(ui.showInstructions){
+    const root = document.getElementById("app");
+    const extra = document.createElement("div");
+    extra.innerHTML = renderInstructionsModal();
+    while(extra.firstChild) root.appendChild(extra.firstChild);
+  }
+  if(ui.settingsView){
+    const root = document.getElementById("app");
+    const extra = document.createElement("div");
+    if(ui.settingsView==="root") extra.innerHTML = renderSettingsSheet();
+    else if(ui.settingsView==="shelves") extra.innerHTML = renderShelvesSheet();
+    else if(ui.settingsView==="theme") extra.innerHTML = renderThemeSheet();
+    else if(ui.settingsView==="backup") extra.innerHTML = renderBackupSheet();
+    while(extra.firstChild) root.appendChild(extra.firstChild);
+  }
+};
+
+/* ================= backup export/import ================= */
+
+async function doBackupExport(){
+  const payload = JSON.stringify({ ...state, exportedAt: new Date().toISOString(), app:"moy-holodilnik", version:3 }, null, 2);
+  const filename = `moy-holodilnik-backup-${todayISO()}.json`;
+  try{
+    const downloads = window.claude ? await window.claude.use("downloads") : null;
+    if(downloads){
+      await downloads.save({ filename, data: payload });
+      showToast("Резервная копия сохранена");
+      return;
+    }
+  }catch(err){ /* fall through to manual fallback */ }
+  const box = document.getElementById("backup-fallback");
+  if(box){
+    box.innerHTML = `<div class="backup-box"><div class="f-label" style="margin-bottom:6px;">Скачивание недоступно — скопируйте текст вручную:</div><textarea class="f mono" style="min-height:120px;font-size:11px;" onclick="this.select()">${esc(payload)}</textarea></div>`;
+  }
+}
+
+function doBackupImport(){
+  const raw = document.getElementById("restore-text").value.trim();
+  if(!raw){ showToast("Вставьте текст резервной копии"); return; }
+  let parsed;
+  try{ parsed = JSON.parse(raw); }catch(e){ showToast("Не удалось прочитать файл — проверьте, что скопирован весь текст"); return; }
+  if(!parsed || !Array.isArray(parsed.items) || !Array.isArray(parsed.recipes)){
+    showToast("Файл не похож на резервную копию «Мой холодильник»"); return;
+  }
+  if(!confirm("Заменить текущие данные данными из резервной копии? Текущие продукты, рецепты, список покупок и меню будут перезаписаны.")) return;
+  state = {
+    items: parsed.items||[], recipes: parsed.recipes||[...SEED_RECIPES, ...BOOK_RECIPES].map(r=>({...r})),
+    shopping: parsed.shopping||[], plan: parsed.plan||{},
+    shelves: (Array.isArray(parsed.shelves)&&parsed.shelves.length) ? parsed.shelves : [...DEFAULT_SHELVES],
+    productFacts: (parsed.productFacts && typeof parsed.productFacts==="object") ? parsed.productFacts : {},
+    settings: { accent: parsed.settings?.accent||"green", mode: parsed.settings?.mode||"system", seenIntro:true },
+  };
+  ui.settingsView=null; ui.sheet=null;
+  persistAndRender();
+  showToast("Данные восстановлены из резервной копии");
+}
+
+/* ================= init ================= */
+
+(function init(){
+  const { data, isFirstRun } = loadState();
+  state = data;
+  if(isFirstRun || !state.settings.seenIntro) ui.showInstructions = true;
+  render();
+})();
+</script>
+</body>
+</html>
