@@ -919,9 +919,9 @@ function renderFridge(){
         ${it.photo ? `<img src="${it.photo}" style="width:36px;height:36px;border-radius:9px;object-fit:cover;flex-shrink:0;">` : ""}
         <div style="flex:1;min-width:0;">
           <div class="card-title">${esc(it.name)}${it.brand?` <span style="font-weight:400;color:var(--muted);font-size:0.85em;">· ${esc(it.brand)}</span>`:""}</div>
-          <div class="card-meta mono">${it.qty} ${esc(it.unit)}${kcal!==null?` · ≈${kcal} ккал`:""}${it.price?` · ${it.price}€${it.store?" ("+esc(it.store)+")":""}`:""}</div>
+          <div class="card-meta mono">${it.pieceCount ? `${it.pieceCount} × ${it.pieceQty}${esc(it.unit)} = ${it.qty}${esc(it.unit)}` : `${it.qty} ${esc(it.unit)}`}${kcal!==null?` · ≈${kcal} ккал`:""}${it.price?` · ${it.price}€${it.store?" ("+esc(it.store)+")":""}`:""}</div>
         </div>
-        ${!isWeight(it.unit) ? `<button class="round-btn" data-action="item-decrement" data-id="${it.id}" aria-label="Использовать одну штуку">${icon("minus",15)}</button>` : ""}
+        ${(it.pieceCount || !isWeight(it.unit)) ? `<button class="round-btn" data-action="item-decrement" data-id="${it.id}" aria-label="Использовать одну штуку">${icon("minus",15)}</button>` : ""}
         <button class="round-btn" style="background:transparent;color:var(--muted);" data-action="edit-item" data-id="${it.id}">${icon("pencil",14)}</button>
         <button class="round-btn" style="background:transparent;color:var(--muted);" data-action="remove-item" data-id="${it.id}">${icon("trash",15)}</button>
       </div>`;
@@ -1180,14 +1180,18 @@ function renderAddItemSheet(){
     <div class="sheet-header"><span class="sheet-title display">${editing ? "Изменить продукт" : `Новый продукт (${(LOCATIONS.find(l=>l.id===loc)||LOCATIONS[0]).label.toLowerCase()})`}</span>
       <button class="icon-btn" data-action="close-sheet">${icon("x",18)}</button></div>
     <input class="f" id="new-name" placeholder="Название (напр. куриное филе)" value="${esc(v("name"))}">
+    <label class="f-label">Вес/объём одной штуки</label>
     <div class="row-gap">
       <div class="flex1" style="display:flex;align-items:center;gap:6px;">
         <button type="button" class="tiny-btn" style="width:30px;height:30px;" data-action="qty-step" data-dir="-1">${icon("minus",13)}</button>
-        <input class="f" id="new-qty" placeholder="Кол-во" type="number" style="margin-bottom:0;text-align:center;" value="${esc(v("qty"))}">
+        <input class="f" id="new-qty" placeholder="Кол-во" type="number" style="margin-bottom:0;text-align:center;" value="${esc(editing && editing.pieceQty!=null ? editing.pieceQty : v("qty"))}">
         <button type="button" class="tiny-btn" style="width:30px;height:30px;" data-action="qty-step" data-dir="1">${icon("plus",13)}</button>
       </div>
       <select class="f flex1" id="new-unit">${UNITS.filter(u=>u!=='порции').map(u=>`<option ${u===v("unit","г")?'selected':''}>${u}</option>`).join("")}</select>
     </div>
+    <label class="f-label">Сколько таких же штук</label>
+    <input class="f" id="new-pieces" type="number" placeholder="1" value="${esc(v("pieceCount",1))}">
+    <p class="hint" style="margin:-6px 0 10px;">Например: вес/объём одной шоколадки — 55 г, а штук — 3. Общее количество приложение посчитает само.</p>
     <label class="f-label">Полка</label>
     <select class="f" id="new-shelf">${(state.shelves[loc]||[]).map(sh=>`<option ${sh===v("shelf",(state.shelves[loc]||[])[0])?'selected':''}>${esc(sh)}</option>`).join("")}</select>
 
@@ -1479,8 +1483,10 @@ document.addEventListener("click", (e) => {
 
   if(action==="submit-item"){
     const name = document.getElementById("new-name").value.trim();
-    const qty = +document.getElementById("new-qty").value;
-    if(!name || !qty) return;
+    const perPieceQty = +document.getElementById("new-qty").value;
+    if(!name || !perPieceQty) return;
+    const pieceCount = Math.max(1, +document.getElementById("new-pieces").value || 1);
+    const qty = +(perPieceQty * pieceCount).toFixed(2);
     const kcalVal = document.getElementById("new-kcal").value;
     const proteinVal = document.getElementById("new-protein").value;
     const fatVal = document.getElementById("new-fat").value;
@@ -1500,6 +1506,7 @@ document.addEventListener("click", (e) => {
     }
     const fields = {
       name, qty, unit:document.getElementById("new-unit").value,
+      pieceQty: pieceCount>1 ? perPieceQty : null, pieceCount: pieceCount>1 ? pieceCount : null,
       expiry, madeDate, shelfLifeValue, shelfLifeUnit, shelf:document.getElementById("new-shelf").value,
       kcal100: kcalVal ? +kcalVal : null, protein100: proteinVal ? +proteinVal : null, fat100: fatVal ? +fatVal : null, carbs100: carbsVal ? +carbsVal : null,
       price: priceVal ? +priceVal : null, store: storeVal || null, brand: brandVal || null, photo: ui.itemForm.photoDataUrl || null,
@@ -1518,7 +1525,17 @@ document.addEventListener("click", (e) => {
   }
 
   if(action==="dish-eat"){ const it=state.items.find(i=>i.id===t.dataset.id); if(it){ it.qty=Math.max(0,+(it.qty-1).toFixed(1)); if(it.qty<=0) state.items=state.items.filter(i=>i.id!==it.id); persistAndRender(); } return; }
-  if(action==="item-decrement"){ const it=state.items.find(i=>i.id===t.dataset.id); if(it){ it.qty=Math.max(0,+(it.qty-1).toFixed(2)); if(it.qty<=0) state.items=state.items.filter(i=>i.id!==it.id); persistAndRender(); } return; }
+  if(action==="item-decrement"){
+    const it=state.items.find(i=>i.id===t.dataset.id);
+    if(it){
+      const step = it.pieceCount ? it.pieceQty : 1;
+      it.qty = Math.max(0, +(it.qty-step).toFixed(2));
+      if(it.pieceCount) it.pieceCount = Math.max(0, it.pieceCount-1);
+      if(it.qty<=0 || it.pieceCount===0) state.items=state.items.filter(i=>i.id!==it.id);
+      persistAndRender();
+    }
+    return;
+  }
   if(action==="remove-item"){ state.items = state.items.filter(i=>i.id!==t.dataset.id); persistAndRender(); return; }
 
   if(action==="set-recipe-cat"){ ui.recipeCat=t.dataset.cat; render(); return; }
