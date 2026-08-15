@@ -513,6 +513,7 @@ function icon(name, size){
     snow: `<line x1="12" y1="3" x2="12" y2="21"/><line x1="4.5" y1="7.5" x2="19.5" y2="16.5"/><line x1="19.5" y1="7.5" x2="4.5" y2="16.5"/>`,
     cookie: `<circle cx="12" cy="12" r="8.5"/><circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="14.5" cy="9.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="14" r="1" fill="currentColor" stroke="none"/><circle cx="9.5" cy="14.5" r="1" fill="currentColor" stroke="none"/>`,
     camera: `<path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.3"/>`,
+    pencil: `<path d="M4 20l1-4.2L15.6 5.2a1.5 1.5 0 0 1 2.1 0l1.1 1.1a1.5 1.5 0 0 1 0 2.1L8.2 19 4 20z"/><line x1="14" y1="6.8" x2="17.2" y2="10"/>`,
     book: `<path d="M4 5.5c2-1 5-1.3 8 0v13c-3-1.3-6-1-8 0z"/><path d="M20 5.5c-2-1-5-1.3-8 0v13c3-1.3 6-1 8 0z"/>`,
     cart: `<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M3 4h2l2.2 11.2a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L21 8H6.2"/>`,
     calendar: `<rect x="3.5" y="5" width="17" height="16" rx="2"/><line x1="3.5" y1="10" x2="20.5" y2="10"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="16" y1="2.5" x2="16" y2="6.5"/>`,
@@ -900,6 +901,7 @@ function renderFridge(){
           <div class="card-title">${esc(it.name)}${it.brand?` <span style="font-weight:400;color:var(--muted);font-size:0.85em;">· ${esc(it.brand)}</span>`:""}</div>
           <div class="card-meta mono">${it.qty} ${esc(it.unit)}${kcal!==null?` · ≈${kcal} ккал`:""}${it.price?` · ${it.price}€${it.store?" ("+esc(it.store)+")":""}`:""}</div>
         </div>
+        <button class="round-btn" style="background:transparent;color:var(--muted);" data-action="edit-item" data-id="${it.id}">${icon("pencil",14)}</button>
         <button class="round-btn" style="background:transparent;color:var(--muted);" data-action="remove-item" data-id="${it.id}">${icon("trash",15)}</button>
       </div>`;
     }).join("");
@@ -1100,61 +1102,89 @@ function recalcCookTotals(){
   box.textContent = `Известно по ${t.counted} из ${t.total} · всего ≈${Math.round(t.kcal)} ккал · ${perServing} ккал на порцию`;
 }
 
+function renderPhotoRow(){
+  const s = ui.itemForm;
+  return `<button class="btn-secondary" style="width:auto;flex:1;margin-bottom:0;padding:9px 0;" data-action="pick-photo">${icon("camera",15)} ${s.photoDataUrl ? "Заменить фото" : "Добавить фото"}</button>
+    ${s.photoDataUrl ? `<img src="${s.photoDataUrl}" style="width:44px;height:44px;border-radius:10px;object-fit:cover;border:1px solid var(--border);flex-shrink:0;">
+    <button class="round-btn" style="background:transparent;color:var(--danger);flex-shrink:0;" data-action="clear-photo">${icon("x",14)}</button>` : ""}`;
+}
+// Rebuilds just the photo row (button/preview/clear) in place — never a full sheet re-render, so
+// whatever the user has already typed into the other fields (name, grams, etc.) is left untouched.
+function refreshPhotoRow(){
+  const row = document.getElementById("photo-row");
+  if(!row) return;
+  row.innerHTML = `<input type="file" accept="image/*" id="new-photo" style="display:none;">${renderPhotoRow()}`;
+  bindPhotoInput();
+}
+function bindPhotoInput(){
+  const photoInput = document.getElementById("new-photo");
+  if(!photoInput) return;
+  photoInput.addEventListener("change", async () => {
+    const file = photoInput.files[0];
+    if(!file) return;
+    try{
+      ui.itemForm.photoDataUrl = await compressImageFile(file, 320, 0.62);
+      refreshPhotoRow();
+    }catch(e){ showToast("Не удалось загрузить фото"); }
+  });
+}
 function renderAddItemSheet(){
   const s = ui.itemForm || (ui.itemForm = { openExtra:false });
+  const editing = s.editId ? state.items.find(i=>i.id===s.editId) : null;
+  const v = (field, fallback) => editing && editing[field]!=null ? editing[field] : (fallback ?? "");
+  const loc = editing ? editing.location : ui.loc;
   return `<div class="sheet-overlay" data-action="close-sheet"></div>
   <div class="sheet">
-    <div class="sheet-header"><span class="sheet-title display">Новый продукт (${(LOCATIONS.find(l=>l.id===ui.loc)||LOCATIONS[0]).label.toLowerCase()})</span>
+    <div class="sheet-header"><span class="sheet-title display">${editing ? "Изменить продукт" : `Новый продукт (${(LOCATIONS.find(l=>l.id===loc)||LOCATIONS[0]).label.toLowerCase()})`}</span>
       <button class="icon-btn" data-action="close-sheet">${icon("x",18)}</button></div>
-    <input class="f" id="new-name" placeholder="Название (напр. куриное филе)">
+    <input class="f" id="new-name" placeholder="Название (напр. куриное филе)" value="${esc(v("name"))}">
     <div class="row-gap">
-      <input class="f flex1" id="new-qty" placeholder="Кол-во" type="number">
-      <select class="f flex1" id="new-unit">${UNITS.filter(u=>u!=='порции').map(u=>`<option>${u}</option>`).join("")}</select>
+      <input class="f flex1" id="new-qty" placeholder="Кол-во" type="number" value="${esc(v("qty"))}">
+      <select class="f flex1" id="new-unit">${UNITS.filter(u=>u!=='порции').map(u=>`<option ${u===v("unit","г")?'selected':''}>${u}</option>`).join("")}</select>
     </div>
     <label class="f-label">Полка</label>
-    <select class="f" id="new-shelf">${state.shelves.map(sh=>`<option>${esc(sh)}</option>`).join("")}</select>
+    <select class="f" id="new-shelf">${state.shelves.map(sh=>`<option ${sh===v("shelf",state.shelves[0])?'selected':''}>${esc(sh)}</option>`).join("")}</select>
     <label class="f-label">Годен до</label>
-    <input class="f" id="new-expiry" type="date" value="${addDays(5)}">
-    <button class="link-row" data-action="toggle-extra">${icon(s.openExtra?"chevUp":"chevDown",14)} марка, калорийность и цена (необязательно)</button>
+    <input class="f" id="new-expiry" type="date" value="${esc(v("expiry", addDays(5)))}">
+    <button class="link-row" data-action="toggle-extra">${icon(s.openExtra?"chevUp":"chevDown",14)} марка, фото, калорийность и цена (необязательно)</button>
     <div id="extra-fields" style="display:${s.openExtra?'block':'none'};">
-      <input class="f" id="new-brand" placeholder="Марка (напр. Простоквашино)">
+      <input class="f" id="new-brand" placeholder="Марка (напр. Простоквашино)" value="${esc(v("brand"))}">
       <label class="f-label">Фото</label>
-      <div class="row-gap" style="align-items:center;margin-bottom:10px;">
+      <div id="photo-row" class="row-gap" style="align-items:center;margin-bottom:10px;">
         <input type="file" accept="image/*" id="new-photo" style="display:none;">
-        <button class="btn-secondary" style="width:auto;flex:1;margin-bottom:0;padding:9px 0;" data-action="pick-photo">${icon("camera",15)} ${s.photoDataUrl ? "Заменить фото" : "Добавить фото"}</button>
-        ${s.photoDataUrl ? `<img src="${s.photoDataUrl}" style="width:44px;height:44px;border-radius:10px;object-fit:cover;border:1px solid var(--border);flex-shrink:0;">
-        <button class="round-btn" style="background:transparent;color:var(--danger);flex-shrink:0;" data-action="clear-photo">${icon("x",14)}</button>` : ""}
+        ${renderPhotoRow()}
       </div>
       <label class="f-label">На 100г/мл (или на 1 шт, если единица — шт)</label>
       <div class="row-gap">
-        <input class="f flex1" id="new-kcal" type="number" placeholder="ккал">
-        <input class="f flex1" id="new-protein" type="number" placeholder="белки, г">
+        <input class="f flex1" id="new-kcal" type="number" placeholder="ккал" value="${esc(v("kcal100"))}">
+        <input class="f flex1" id="new-protein" type="number" placeholder="белки, г" value="${esc(v("protein100"))}">
       </div>
       <div class="row-gap">
-        <input class="f flex1" id="new-fat" type="number" placeholder="жиры, г">
-        <input class="f flex1" id="new-carbs" type="number" placeholder="углеводы, г">
+        <input class="f flex1" id="new-fat" type="number" placeholder="жиры, г" value="${esc(v("fat100"))}">
+        <input class="f flex1" id="new-carbs" type="number" placeholder="углеводы, г" value="${esc(v("carbs100"))}">
       </div>
       <p class="hint" style="margin:-6px 0 10px;">Эти данные приложение запомнит по названию продукта — пригодятся для расчёта реальной калорийности рецептов.</p>
       <div class="row-gap">
-        <input class="f flex1" id="new-price" placeholder="Цена, €" type="number">
-        <input class="f flex1" id="new-store" placeholder="Магазин">
+        <input class="f flex1" id="new-price" placeholder="Цена, €" type="number" value="${esc(v("price"))}">
+        <input class="f flex1" id="new-store" placeholder="Магазин" value="${esc(v("store"))}">
       </div>
       <div id="price-hint" class="hint" style="margin:-6px 0 10px;"></div>
     </div>
-    <button class="btn-primary" data-action="submit-item">Добавить</button>
+    <button class="btn-primary" data-action="submit-item">${editing ? "Сохранить" : "Добавить"}</button>
   </div>`;
 }
 
-function renderAddRecipeSheet(){
-  const s = ui.recipeForm || (ui.recipeForm = { ingCount:1 });
-  let ingRows = "";
-  for(let i=0;i<s.ingCount;i++){
-    ingRows += `<div class="row-gap" style="margin-bottom:6px;">
+function ingRowHtml(){
+  return `<div class="row-gap" style="margin-bottom:6px;">
       <input class="f flex1" style="margin-bottom:0;flex:2;" data-ing="name" placeholder="продукт">
       <input class="f" style="margin-bottom:0;width:64px;" data-ing="qty" placeholder="кол-во" type="number">
       <select class="f" style="margin-bottom:0;width:84px;" data-ing="unit">${UNITS.filter(u=>u!=='порции').map(u=>`<option>${u}</option>`).join("")}</select>
     </div>`;
-  }
+}
+function renderAddRecipeSheet(){
+  const s = ui.recipeForm || (ui.recipeForm = { ingCount:1 });
+  let ingRows = "";
+  for(let i=0;i<s.ingCount;i++) ingRows += ingRowHtml();
   return `<div class="sheet-overlay" data-action="close-sheet"></div>
   <div class="sheet">
     <div class="sheet-header"><span class="sheet-title display">Новый рецепт</span>
@@ -1274,7 +1304,7 @@ function renderInstructionsModal(){
     <div class="modal">
       <h2 class="display">Как пользоваться</h2>
       <p class="hint" style="margin:0 0 4px;">Коротко — что где находится.</p>
-      <div class="guide-block"><h3>${icon("fridge",14)} Холодильник</h3><p>Добавляйте продукты кнопкой «+». У каждого — полка, срок годности и (опционально) марка, фото, калорийность и цена. Продукты с истекающим сроком (≤2 дня) подсвечиваются жёлтым/красным и поднимаются наверх своей полки. Переключатель сверху — холодильник, морозилка или перекусы.</p></div>
+      <div class="guide-block"><h3>${icon("fridge",14)} Холодильник</h3><p>Добавляйте продукты кнопкой «+». У каждого — полка, срок годности и (опционально) марка, фото, калорийность и цена — значок карандаша на карточке продукта открывает её для редактирования. Продукты с истекающим сроком (≤2 дня) подсвечиваются жёлтым/красным и поднимаются наверх своей полки. Переключатель сверху — холодильник, морозилка или перекусы.</p></div>
       <div class="guide-block"><h3>${icon("book",14)} Рецепты</h3><p>У каждого рецепта — метка «можно готовить» или «X/Y есть», в зависимости от того, что лежит в холодильнике. Откройте рецепт, чтобы увидеть состав и способ приготовления. Кнопка «Приготовила ✓» открывает экран, где для каждого продукта можно выбрать конкретную пачку из холодильника и вписать её реальный вес — калорийность блюда посчитается именно по ним, а не по усреднённым цифрам рецепта. Выбранное спишется с полок, а готовое блюдо появится в холодильнике со своим сроком хранения.</p></div>
       <div class="guide-block"><h3>${icon("calendar",14)} Меню</h3><p>Планируйте завтрак/обед/ужин на неделю вперёд, выбирая рецепты в ячейках. Кнопка «Собрать список покупок на неделю» посчитает, каких продуктов не хватает — с учётом того, что уже есть дома.</p></div>
       <div class="guide-block"><h3>${icon("cart",14)} Покупки</h3><p>Добавляйте вручную или из рецепта («В список покупок»). Отмечайте купленное галочкой и переносите одной кнопкой в холодильник.</p></div>
@@ -1304,17 +1334,7 @@ function bindDynamicInputs(){
     nameInput.addEventListener("blur", updateHint);
   }
 
-  const photoInput = document.getElementById("new-photo");
-  if(photoInput){
-    photoInput.addEventListener("change", async () => {
-      const file = photoInput.files[0];
-      if(!file) return;
-      try{
-        ui.itemForm.photoDataUrl = await compressImageFile(file, 320, 0.62);
-        render();
-      }catch(e){ showToast("Не удалось загрузить фото"); }
-    });
-  }
+  bindPhotoInput();
 
   const cookRows = document.getElementById("cook-rows");
   if(cookRows){
@@ -1350,10 +1370,23 @@ document.addEventListener("click", (e) => {
   if(action==="set-tab"){ ui.tab=t.dataset.tab; ui.recipeOpen=null; render(); return; }
   if(action==="set-loc"){ ui.loc=t.dataset.loc; render(); return; }
   if(action==="open-sheet"){ ui.sheet=t.dataset.sheet; if(ui.sheet==='add-item') ui.itemForm={openExtra:false}; if(ui.sheet==='add-recipe') ui.recipeForm={ingCount:1}; render(); return; }
+  if(action==="edit-item"){
+    const it = state.items.find(i=>i.id===t.dataset.id);
+    if(!it) return;
+    ui.sheet = "add-item";
+    ui.itemForm = { editId: it.id, openExtra: !!(it.brand||it.photo||it.kcal100!=null||it.price!=null), photoDataUrl: it.photo||null };
+    render();
+    return;
+  }
   if(action==="close-sheet"){ ui.sheet=null; render(); return; }
-  if(action==="toggle-extra"){ ui.itemForm.openExtra = !ui.itemForm.openExtra; render(); return; }
+  if(action==="toggle-extra"){
+    ui.itemForm.openExtra = !ui.itemForm.openExtra;
+    document.getElementById("extra-fields").style.display = ui.itemForm.openExtra ? "block" : "none";
+    t.innerHTML = `${icon(ui.itemForm.openExtra?"chevUp":"chevDown",14)} марка, фото, калорийность и цена (необязательно)`;
+    return;
+  }
   if(action==="pick-photo"){ document.getElementById("new-photo").click(); return; }
-  if(action==="clear-photo"){ ui.itemForm.photoDataUrl = null; render(); return; }
+  if(action==="clear-photo"){ ui.itemForm.photoDataUrl = null; refreshPhotoRow(); return; }
 
   if(action==="submit-item"){
     const name = document.getElementById("new-name").value.trim();
@@ -1366,15 +1399,24 @@ document.addEventListener("click", (e) => {
     const priceVal = document.getElementById("new-price").value;
     const storeVal = document.getElementById("new-store").value.trim();
     const brandVal = document.getElementById("new-brand").value.trim();
-    const newItem = {
-      id:uid(), type:"ingredient", name, qty, unit:document.getElementById("new-unit").value,
-      expiry:document.getElementById("new-expiry").value, shelf:document.getElementById("new-shelf").value, location:ui.loc,
+    const editId = ui.itemForm.editId;
+    const fields = {
+      name, qty, unit:document.getElementById("new-unit").value,
+      expiry:document.getElementById("new-expiry").value, shelf:document.getElementById("new-shelf").value,
       kcal100: kcalVal ? +kcalVal : null, protein100: proteinVal ? +proteinVal : null, fat100: fatVal ? +fatVal : null, carbs100: carbsVal ? +carbsVal : null,
       price: priceVal ? +priceVal : null, store: storeVal || null, brand: brandVal || null, photo: ui.itemForm.photoDataUrl || null,
     };
-    state.items.push(newItem);
-    recordProductFacts(newItem);
-    ui.sheet=null; persistAndRender(); return;
+    let savedItem;
+    if(editId){
+      const idx = state.items.findIndex(i=>i.id===editId);
+      if(idx<0) return;
+      savedItem = state.items[idx] = { ...state.items[idx], ...fields };
+    }else{
+      savedItem = { id:uid(), type:"ingredient", location:ui.loc, ...fields };
+      state.items.push(savedItem);
+    }
+    recordProductFacts(savedItem);
+    ui.sheet=null; ui.itemForm=null; persistAndRender(); return;
   }
 
   if(action==="dish-eat"){ const it=state.items.find(i=>i.id===t.dataset.id); if(it){ it.qty=Math.max(0,+(it.qty-1).toFixed(1)); if(it.qty<=0) state.items=state.items.filter(i=>i.id!==it.id); persistAndRender(); } return; }
@@ -1388,7 +1430,7 @@ document.addEventListener("click", (e) => {
   if(action==="add-missing"){ addMissingToShopping(t.dataset.id); return; }
   if(action==="delete-recipe"){ if(confirm("Удалить этот рецепт?")){ state.recipes = state.recipes.filter(r=>r.id!==t.dataset.id); ui.recipeOpen=null; persistAndRender(); } return; }
 
-  if(action==="add-ing-row"){ ui.recipeForm.ingCount++; render(); return; }
+  if(action==="add-ing-row"){ ui.recipeForm.ingCount++; document.getElementById("ing-rows").insertAdjacentHTML("beforeend", ingRowHtml()); return; }
   if(action==="submit-recipe"){
     const name = document.getElementById("r-name").value.trim();
     if(!name) return;
