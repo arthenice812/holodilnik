@@ -455,11 +455,16 @@ const BOOK_RECIPES = [
 /* ================= helpers ================= */
 
 const uid = () => Math.random().toString(36).slice(2,10);
-const todayISO = () => new Date().toISOString().slice(0,10);
-const addDays = (n, from) => { const d = from ? new Date(from) : new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
+// Calendar-date <-> string helpers that stay in LOCAL time throughout (never round-trip through
+// toISOString/UTC), so a date typed as "24 августа" doesn't silently become the 23rd for users
+// east of UTC (or the 25th west of it).
+function parseISODate(s){ const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); }
+function toISODate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+const todayISO = () => toISODate(new Date());
+const addDays = (n, from) => { const d = from ? parseISODate(from) : new Date(); d.setDate(d.getDate()+n); return toISODate(d); };
 const daysUntil = (iso) => {
   if(!iso) return null;
-  const target = new Date(iso+"T00:00:00"); const now = new Date(); now.setHours(0,0,0,0);
+  const target = parseISODate(iso); const now = new Date(); now.setHours(0,0,0,0);
   return Math.round((target-now)/86400000);
 };
 const norm = (s) => (s||"").trim().toLowerCase();
@@ -487,7 +492,7 @@ function compressImageFile(file, maxSize, quality){
     reader.readAsDataURL(file);
   });
 }
-function weekStart(dateStr){ const d = new Date(dateStr); const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); return d.toISOString().slice(0,10); }
+function weekStart(dateStr){ const d = parseISODate(dateStr); const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); return toISODate(d); }
 function weekDates(startIso){ return Array.from({length:7},(_,i)=>addDays(i,startIso)); }
 
 function expiryTone(d){
@@ -985,12 +990,12 @@ function renderPlan(){
   const recipesByCat = (cat) => state.recipes.filter(r => r.category===cat || (cat==="Обед" && r.category==="Салат"));
   let html = `<div class="week-nav">
     <button class="week-btn" data-action="week-shift" data-dir="-1">${icon("arrowLeft",14)}</button>
-    <span class="mono" style="font-size:12.5px;">${new Date(dates[0]).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})} – ${new Date(dates[6]).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})}</span>
+    <span class="mono" style="font-size:12.5px;">${parseISODate(dates[0]).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})} – ${parseISODate(dates[6]).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})}</span>
     <button class="week-btn" data-action="week-shift" data-dir="1">${icon("arrowRight",14)}</button>
   </div>`;
 
   dates.forEach((date,i) => {
-    html += `<div class="day-block"><div class="day-label">${WEEKDAYS[i]} · ${new Date(date).getDate()}</div>`;
+    html += `<div class="day-block"><div class="day-label">${WEEKDAYS[i]} · ${parseISODate(date).getDate()}</div>`;
     MEAL_SLOTS.forEach(slot => {
       const val = (state.plan[date] && state.plan[date][slot]) || "";
       html += `<div class="slot-row">
@@ -1128,11 +1133,32 @@ function bindPhotoInput(){
     }catch(e){ showToast("Не удалось загрузить фото"); }
   });
 }
+const SHELF_UNITS = [ { id:"days", label:"дней" }, { id:"weeks", label:"недель" }, { id:"months", label:"месяцев" } ];
+function addShelfLife(dateStr, value, unit){
+  const d = parseISODate(dateStr||todayISO());
+  if(unit==="months") d.setMonth(d.getMonth()+value);
+  else if(unit==="weeks") d.setDate(d.getDate()+value*7);
+  else d.setDate(d.getDate()+value);
+  return toISODate(d);
+}
+function updateExpiryPreview(){
+  const box = document.getElementById("expiry-computed");
+  const made = document.getElementById("new-made");
+  const valueInput = document.getElementById("new-shelf-value");
+  const unitSelect = document.getElementById("new-shelf-unit");
+  if(!box || !made || !valueInput || !unitSelect) return;
+  const value = +valueInput.value;
+  if(!value){ box.textContent = ""; return; }
+  const expiry = addShelfLife(made.value, value, unitSelect.value);
+  const d = daysUntil(expiry);
+  box.textContent = `Годен до ${parseISODate(expiry).toLocaleDateString("ru-RU",{day:"numeric",month:"long"})} — ${expiryLabel(d)}`;
+}
 function renderAddItemSheet(){
   const s = ui.itemForm || (ui.itemForm = { openExtra:false });
   const editing = s.editId ? state.items.find(i=>i.id===s.editId) : null;
   const v = (field, fallback) => editing && editing[field]!=null ? editing[field] : (fallback ?? "");
   const loc = editing ? editing.location : ui.loc;
+  s.expiryMode = s.expiryMode || (editing && editing.madeDate ? "shelf" : "date");
   return `<div class="sheet-overlay" data-action="close-sheet"></div>
   <div class="sheet">
     <div class="sheet-header"><span class="sheet-title display">${editing ? "Изменить продукт" : `Новый продукт (${(LOCATIONS.find(l=>l.id===loc)||LOCATIONS[0]).label.toLowerCase()})`}</span>
@@ -1144,8 +1170,25 @@ function renderAddItemSheet(){
     </div>
     <label class="f-label">Полка</label>
     <select class="f" id="new-shelf">${state.shelves.map(sh=>`<option ${sh===v("shelf",state.shelves[0])?'selected':''}>${esc(sh)}</option>`).join("")}</select>
-    <label class="f-label">Годен до</label>
-    <input class="f" id="new-expiry" type="date" value="${esc(v("expiry", addDays(5)))}">
+
+    <label class="f-label">Срок годности</label>
+    <div class="segment-row" style="margin:0 0 10px;">
+      <button type="button" class="segment ${s.expiryMode==='date'?'active':''}" data-action="set-expiry-mode" data-mode="date">Дата окончания</button>
+      <button type="button" class="segment ${s.expiryMode==='shelf'?'active':''}" data-action="set-expiry-mode" data-mode="shelf">Изготовлено + срок</button>
+    </div>
+    <div id="expiry-date-mode" style="display:${s.expiryMode==='date'?'block':'none'};">
+      <input class="f" id="new-expiry" type="date" value="${esc(v("expiry", addDays(5)))}">
+    </div>
+    <div id="expiry-shelf-mode" style="display:${s.expiryMode==='shelf'?'block':'none'};">
+      <label class="f-label">Дата изготовления</label>
+      <input class="f" id="new-made" type="date" value="${esc(v("madeDate", todayISO()))}">
+      <div class="row-gap">
+        <input class="f flex1" id="new-shelf-value" type="number" placeholder="Срок хранения" value="${esc(v("shelfLifeValue"))}">
+        <select class="f flex1" id="new-shelf-unit">${SHELF_UNITS.map(u=>`<option value="${u.id}" ${u.id===v("shelfLifeUnit","days")?'selected':''}>${u.label}</option>`).join("")}</select>
+      </div>
+      <p class="hint" id="expiry-computed" style="margin-top:-6px;"></p>
+    </div>
+
     <button class="link-row" data-action="toggle-extra">${icon(s.openExtra?"chevUp":"chevDown",14)} марка, фото, калорийность и цена (необязательно)</button>
     <div id="extra-fields" style="display:${s.openExtra?'block':'none'};">
       <input class="f" id="new-brand" placeholder="Марка (напр. Простоквашино)" value="${esc(v("brand"))}">
@@ -1304,7 +1347,7 @@ function renderInstructionsModal(){
     <div class="modal">
       <h2 class="display">Как пользоваться</h2>
       <p class="hint" style="margin:0 0 4px;">Коротко — что где находится.</p>
-      <div class="guide-block"><h3>${icon("fridge",14)} Холодильник</h3><p>Добавляйте продукты кнопкой «+». У каждого — полка, срок годности и (опционально) марка, фото, калорийность и цена — значок карандаша на карточке продукта открывает её для редактирования. Продукты с истекающим сроком (≤2 дня) подсвечиваются жёлтым/красным и поднимаются наверх своей полки. Переключатель сверху — холодильник, морозилка или перекусы.</p></div>
+      <div class="guide-block"><h3>${icon("fridge",14)} Холодильник</h3><p>Добавляйте продукты кнопкой «+». Срок годности можно указать напрямую или как «дата изготовления + срок хранения» (как на упаковке) — приложение само посчитает дату окончания. Есть полка и (опционально) марка, фото, калорийность и цена — значок карандаша на карточке продукта открывает её для редактирования. Продукты с истекающим сроком (≤2 дня) подсвечиваются жёлтым/красным и поднимаются наверх своей полки. Переключатель сверху — холодильник, морозилка или перекусы.</p></div>
       <div class="guide-block"><h3>${icon("book",14)} Рецепты</h3><p>У каждого рецепта — метка «можно готовить» или «X/Y есть», в зависимости от того, что лежит в холодильнике. Откройте рецепт, чтобы увидеть состав и способ приготовления. Кнопка «Приготовила ✓» открывает экран, где для каждого продукта можно выбрать конкретную пачку из холодильника и вписать её реальный вес — калорийность блюда посчитается именно по ним, а не по усреднённым цифрам рецепта. Выбранное спишется с полок, а готовое блюдо появится в холодильнике со своим сроком хранения.</p></div>
       <div class="guide-block"><h3>${icon("calendar",14)} Меню</h3><p>Планируйте завтрак/обед/ужин на неделю вперёд, выбирая рецепты в ячейках. Кнопка «Собрать список покупок на неделю» посчитает, каких продуктов не хватает — с учётом того, что уже есть дома.</p></div>
       <div class="guide-block"><h3>${icon("cart",14)} Покупки</h3><p>Добавляйте вручную или из рецепта («В список покупок»). Отмечайте купленное галочкой и переносите одной кнопкой в холодильник.</p></div>
@@ -1335,6 +1378,14 @@ function bindDynamicInputs(){
   }
 
   bindPhotoInput();
+
+  const shelfValueInput = document.getElementById("new-shelf-value");
+  if(shelfValueInput){
+    document.getElementById("new-made").addEventListener("input", updateExpiryPreview);
+    shelfValueInput.addEventListener("input", updateExpiryPreview);
+    document.getElementById("new-shelf-unit").addEventListener("change", updateExpiryPreview);
+    updateExpiryPreview();
+  }
 
   const cookRows = document.getElementById("cook-rows");
   if(cookRows){
@@ -1387,6 +1438,14 @@ document.addEventListener("click", (e) => {
   }
   if(action==="pick-photo"){ document.getElementById("new-photo").click(); return; }
   if(action==="clear-photo"){ ui.itemForm.photoDataUrl = null; refreshPhotoRow(); return; }
+  if(action==="set-expiry-mode"){
+    ui.itemForm.expiryMode = t.dataset.mode;
+    document.querySelectorAll('[data-action="set-expiry-mode"]').forEach(b => b.classList.toggle("active", b.dataset.mode===t.dataset.mode));
+    document.getElementById("expiry-date-mode").style.display = t.dataset.mode==="date" ? "block" : "none";
+    document.getElementById("expiry-shelf-mode").style.display = t.dataset.mode==="shelf" ? "block" : "none";
+    if(t.dataset.mode==="shelf") updateExpiryPreview();
+    return;
+  }
 
   if(action==="submit-item"){
     const name = document.getElementById("new-name").value.trim();
@@ -1400,9 +1459,18 @@ document.addEventListener("click", (e) => {
     const storeVal = document.getElementById("new-store").value.trim();
     const brandVal = document.getElementById("new-brand").value.trim();
     const editId = ui.itemForm.editId;
+    let expiry, madeDate=null, shelfLifeValue=null, shelfLifeUnit=null;
+    if(ui.itemForm.expiryMode==="shelf"){
+      madeDate = document.getElementById("new-made").value;
+      shelfLifeValue = +document.getElementById("new-shelf-value").value || null;
+      shelfLifeUnit = document.getElementById("new-shelf-unit").value;
+      expiry = shelfLifeValue ? addShelfLife(madeDate, shelfLifeValue, shelfLifeUnit) : madeDate;
+    }else{
+      expiry = document.getElementById("new-expiry").value;
+    }
     const fields = {
       name, qty, unit:document.getElementById("new-unit").value,
-      expiry:document.getElementById("new-expiry").value, shelf:document.getElementById("new-shelf").value,
+      expiry, madeDate, shelfLifeValue, shelfLifeUnit, shelf:document.getElementById("new-shelf").value,
       kcal100: kcalVal ? +kcalVal : null, protein100: proteinVal ? +proteinVal : null, fat100: fatVal ? +fatVal : null, carbs100: carbsVal ? +carbsVal : null,
       price: priceVal ? +priceVal : null, store: storeVal || null, brand: brandVal || null, photo: ui.itemForm.photoDataUrl || null,
     };
