@@ -168,7 +168,11 @@
 
 /* ================= constants ================= */
 
-const DEFAULT_SHELVES = ["Овощи и фрукты","Молочное и яйца","Мясо и рыба","Соусы и бакалея","Готовая еда","Другое"];
+const DEFAULT_SHELVES = {
+  fridge: ["Овощи и фрукты","Молочное и яйца","Мясо и рыба","Соусы и бакалея","Готовая еда","Другое"],
+  freezer: ["Мясо и птица","Рыба и морепродукты","Овощи и ягоды","Полуфабрикаты","Готовые блюда","Другое"],
+  snacks: ["Сладкое","Солёное","Орехи и сухофрукты","Батончики и снеки","Другое"],
+};
 const LOCATIONS = [
   { id:"fridge", label:"Холодильник", icon:"fridge" },
   { id:"freezer", label:"Морозилка", icon:"snow" },
@@ -554,10 +558,19 @@ function defaultState(){
     recipes: [...SEED_RECIPES, ...BOOK_RECIPES].map(r => ({...r})),
     shopping: [],
     plan: {},
-    shelves: [...DEFAULT_SHELVES],
+    shelves: { fridge:[...DEFAULT_SHELVES.fridge], freezer:[...DEFAULT_SHELVES.freezer], snacks:[...DEFAULT_SHELVES.snacks] },
     productFacts: {},
     settings: { accent:"green", mode:"system", seenIntro:false },
   };
+}
+// Accepts the old single flat shelf list (pre-multi-location) as well as the current per-location shape.
+function normalizeShelves(raw){
+  const base = { fridge:[...DEFAULT_SHELVES.fridge], freezer:[...DEFAULT_SHELVES.freezer], snacks:[...DEFAULT_SHELVES.snacks] };
+  if(Array.isArray(raw) && raw.length) return { ...base, fridge: raw };
+  if(raw && typeof raw==="object"){
+    LOCATIONS.forEach(l => { if(Array.isArray(raw[l.id]) && raw[l.id].length) base[l.id] = raw[l.id]; });
+  }
+  return base;
 }
 
 function loadState(){
@@ -570,7 +583,7 @@ function loadState(){
     if(Array.isArray(parsed.recipes)) s.recipes = parsed.recipes;
     if(Array.isArray(parsed.shopping)) s.shopping = parsed.shopping;
     if(parsed.plan && typeof parsed.plan === "object") s.plan = parsed.plan;
-    if(Array.isArray(parsed.shelves) && parsed.shelves.length) s.shelves = parsed.shelves;
+    if(parsed.shelves) s.shelves = normalizeShelves(parsed.shelves);
     if(parsed.productFacts && typeof parsed.productFacts === "object") s.productFacts = parsed.productFacts;
     if(parsed.settings) s.settings = { ...s.settings, ...parsed.settings };
     state = s; // recordProductFacts below reads the module-level `state`
@@ -746,7 +759,8 @@ function addMissingToShopping(recipeId){
 function moveBoughtToFridge(){
   const bought = state.shopping.filter(s=>s.bought);
   if(!bought.length) return;
-  const fallbackShelf = state.shelves[state.shelves.length-1] || "Другое";
+  const fridgeShelves = state.shelves.fridge;
+  const fallbackShelf = fridgeShelves[fridgeShelves.length-1] || "Другое";
   bought.forEach(b => state.items.push({ id:uid(), type:"ingredient", name:b.name, qty:b.qty, unit:b.unit, expiry:addDays(6), location:"fridge", shelf:fallbackShelf }));
   state.shopping = state.shopping.filter(s=>!s.bought);
   persistAndRender();
@@ -862,9 +876,10 @@ function renderTab(){
 function renderFridge(){
   const locItems = state.items.filter(i => (i.location||"fridge")===ui.loc);
   const dishes = locItems.filter(i=>i.type==="dish").sort((a,b)=>(daysUntil(a.expiry)??999)-(daysUntil(b.expiry)??999));
-  const grouped = state.shelves.map(sh => ({
+  const shelves = state.shelves[ui.loc] || [];
+  const grouped = shelves.map(sh => ({
     shelf: sh,
-    list: locItems.filter(i => i.type!=="dish" && (i.shelf||state.shelves[state.shelves.length-1])===sh).sort((a,b)=>(daysUntil(a.expiry)??999)-(daysUntil(b.expiry)??999)),
+    list: locItems.filter(i => i.type!=="dish" && (i.shelf||shelves[shelves.length-1])===sh).sort((a,b)=>(daysUntil(a.expiry)??999)-(daysUntil(b.expiry)??999)),
   })).filter(g=>g.list.length>0);
 
   let html = `
@@ -906,6 +921,7 @@ function renderFridge(){
           <div class="card-title">${esc(it.name)}${it.brand?` <span style="font-weight:400;color:var(--muted);font-size:0.85em;">· ${esc(it.brand)}</span>`:""}</div>
           <div class="card-meta mono">${it.qty} ${esc(it.unit)}${kcal!==null?` · ≈${kcal} ккал`:""}${it.price?` · ${it.price}€${it.store?" ("+esc(it.store)+")":""}`:""}</div>
         </div>
+        ${!isWeight(it.unit) ? `<button class="round-btn" data-action="item-decrement" data-id="${it.id}" aria-label="Использовать одну штуку">${icon("minus",15)}</button>` : ""}
         <button class="round-btn" style="background:transparent;color:var(--muted);" data-action="edit-item" data-id="${it.id}">${icon("pencil",14)}</button>
         <button class="round-btn" style="background:transparent;color:var(--muted);" data-action="remove-item" data-id="${it.id}">${icon("trash",15)}</button>
       </div>`;
@@ -1165,11 +1181,15 @@ function renderAddItemSheet(){
       <button class="icon-btn" data-action="close-sheet">${icon("x",18)}</button></div>
     <input class="f" id="new-name" placeholder="Название (напр. куриное филе)" value="${esc(v("name"))}">
     <div class="row-gap">
-      <input class="f flex1" id="new-qty" placeholder="Кол-во" type="number" value="${esc(v("qty"))}">
+      <div class="flex1" style="display:flex;align-items:center;gap:6px;">
+        <button type="button" class="tiny-btn" style="width:30px;height:30px;" data-action="qty-step" data-dir="-1">${icon("minus",13)}</button>
+        <input class="f" id="new-qty" placeholder="Кол-во" type="number" style="margin-bottom:0;text-align:center;" value="${esc(v("qty"))}">
+        <button type="button" class="tiny-btn" style="width:30px;height:30px;" data-action="qty-step" data-dir="1">${icon("plus",13)}</button>
+      </div>
       <select class="f flex1" id="new-unit">${UNITS.filter(u=>u!=='порции').map(u=>`<option ${u===v("unit","г")?'selected':''}>${u}</option>`).join("")}</select>
     </div>
     <label class="f-label">Полка</label>
-    <select class="f" id="new-shelf">${state.shelves.map(sh=>`<option ${sh===v("shelf",state.shelves[0])?'selected':''}>${esc(sh)}</option>`).join("")}</select>
+    <select class="f" id="new-shelf">${(state.shelves[loc]||[]).map(sh=>`<option ${sh===v("shelf",(state.shelves[loc]||[])[0])?'selected':''}>${esc(sh)}</option>`).join("")}</select>
 
     <label class="f-label">Срок годности</label>
     <div class="segment-row" style="margin:0 0 10px;">
@@ -1258,7 +1278,7 @@ function renderSettingsSheet(){
     <div class="sheet-header"><span class="sheet-title display">Настройки</span>
       <button class="icon-btn" data-action="close-settings">${icon("x",18)}</button></div>
     <div class="settings-row" role="button" tabindex="0" data-action="settings-open" data-view="shelves">
-      <div><div class="settings-row-label">Полки холодильника</div><div class="settings-row-sub">${state.shelves.length} полок · порядок и названия</div></div>
+      <div><div class="settings-row-label">Полки</div><div class="settings-row-sub">свои для холодильника, морозилки и перекусов</div></div>
       ${icon("chevRight",18)}
     </div>
     <div class="settings-row" role="button" tabindex="0" data-action="settings-open" data-view="theme">
@@ -1277,7 +1297,8 @@ function renderSettingsSheet(){
 }
 
 function renderShelvesSheet(){
-  const list = state.shelves;
+  ui.shelvesLoc = ui.shelvesLoc || ui.loc;
+  const list = state.shelves[ui.shelvesLoc];
   return `<div class="sheet-overlay" data-action="close-settings"></div>
   <div class="sheet">
     <div class="sheet-header">
@@ -1285,13 +1306,16 @@ function renderShelvesSheet(){
       <span class="sheet-title display">Полки</span>
       <button class="icon-btn" data-action="close-settings">${icon("x",18)}</button>
     </div>
-    <p class="hint" style="margin-top:0;">Переименуйте, удалите или переставьте полки — список в холодильнике перестроится сам. Последняя полка используется как запасная для новых продуктов.</p>
-    ${list.map((sh,i) => `<div class="shelf-row">
+    <div class="segment-row" style="margin-top:0;">
+      ${LOCATIONS.map(l => `<button class="segment ${ui.shelvesLoc===l.id?'active':''}" data-action="set-shelves-loc" data-loc="${l.id}">${icon(l.icon,14)} ${l.label}</button>`).join("")}
+    </div>
+    <p class="hint" style="margin-top:0;">Переименуйте, удалите или переставьте полки — список в разделе перестроится сам. У холодильника, морозилки и перекусов — свои независимые полки. Последняя используется как запасная для новых продуктов.</p>
+    <div id="shelf-list">${list.map((sh,i) => `<div class="shelf-row">
       <input value="${esc(sh)}" data-shelf-index="${i}" data-action-blur="rename-shelf">
       <button class="tiny-btn" data-action="shelf-move" data-dir="-1" data-index="${i}" ${i===0?'disabled':''}>${icon("up",13)}</button>
       <button class="tiny-btn" data-action="shelf-move" data-dir="1" data-index="${i}" ${i===list.length-1?'disabled':''}>${icon("down",13)}</button>
       <button class="tiny-btn" data-action="shelf-delete" data-index="${i}" ${list.length<=1?'disabled':''}>${icon("trash",13)}</button>
-    </div>`).join("")}
+    </div>`).join("")}</div>
     <div class="row-gap" style="margin-top:10px;">
       <input class="f flex1" id="new-shelf-name" placeholder="Новая полка" style="margin-bottom:0;">
       <button class="icon-btn" style="background:var(--primary);color:#fff;border-color:var(--primary);" data-action="shelf-add">${icon("plus",18)}</button>
@@ -1351,7 +1375,7 @@ function renderInstructionsModal(){
       <div class="guide-block"><h3>${icon("book",14)} Рецепты</h3><p>У каждого рецепта — метка «можно готовить» или «X/Y есть», в зависимости от того, что лежит в холодильнике. Откройте рецепт, чтобы увидеть состав и способ приготовления. Кнопка «Приготовила ✓» открывает экран, где для каждого продукта можно выбрать конкретную пачку из холодильника и вписать её реальный вес — калорийность блюда посчитается именно по ним, а не по усреднённым цифрам рецепта. Выбранное спишется с полок, а готовое блюдо появится в холодильнике со своим сроком хранения.</p></div>
       <div class="guide-block"><h3>${icon("calendar",14)} Меню</h3><p>Планируйте завтрак/обед/ужин на неделю вперёд, выбирая рецепты в ячейках. Кнопка «Собрать список покупок на неделю» посчитает, каких продуктов не хватает — с учётом того, что уже есть дома.</p></div>
       <div class="guide-block"><h3>${icon("cart",14)} Покупки</h3><p>Добавляйте вручную или из рецепта («В список покупок»). Отмечайте купленное галочкой и переносите одной кнопкой в холодильник.</p></div>
-      <div class="guide-block"><h3>${icon("gear",14)} Настройки</h3><p>Здесь можно переименовать или переставить полки холодильника под себя, выбрать светлую/тёмную/системную тему и акцентный цвет, а также сохранить или восстановить резервную копию всех данных.</p></div>
+      <div class="guide-block"><h3>${icon("gear",14)} Настройки</h3><p>Здесь можно настроить полки под себя — отдельно для холодильника, морозилки и перекусов, выбрать светлую/тёмную/системную тему и акцентный цвет, а также сохранить или восстановить резервную копию всех данных.</p></div>
       <button class="btn-primary" style="margin-top:8px;" data-action="close-instructions">Понятно, начать</button>
     </div>
   </div>`;
@@ -1436,6 +1460,12 @@ document.addEventListener("click", (e) => {
     t.innerHTML = `${icon(ui.itemForm.openExtra?"chevUp":"chevDown",14)} марка, фото, калорийность и цена (необязательно)`;
     return;
   }
+  if(action==="qty-step"){
+    const input = document.getElementById("new-qty");
+    const step = isWeight(document.getElementById("new-unit").value) ? 50 : 1;
+    input.value = Math.max(0, (+input.value||0) + step*(+t.dataset.dir));
+    return;
+  }
   if(action==="pick-photo"){ document.getElementById("new-photo").click(); return; }
   if(action==="clear-photo"){ ui.itemForm.photoDataUrl = null; refreshPhotoRow(); return; }
   if(action==="set-expiry-mode"){
@@ -1488,6 +1518,7 @@ document.addEventListener("click", (e) => {
   }
 
   if(action==="dish-eat"){ const it=state.items.find(i=>i.id===t.dataset.id); if(it){ it.qty=Math.max(0,+(it.qty-1).toFixed(1)); if(it.qty<=0) state.items=state.items.filter(i=>i.id!==it.id); persistAndRender(); } return; }
+  if(action==="item-decrement"){ const it=state.items.find(i=>i.id===t.dataset.id); if(it){ it.qty=Math.max(0,+(it.qty-1).toFixed(2)); if(it.qty<=0) state.items=state.items.filter(i=>i.id!==it.id); persistAndRender(); } return; }
   if(action==="remove-item"){ state.items = state.items.filter(i=>i.id!==t.dataset.id); persistAndRender(); return; }
 
   if(action==="set-recipe-cat"){ ui.recipeCat=t.dataset.cat; render(); return; }
@@ -1532,28 +1563,31 @@ document.addEventListener("click", (e) => {
   if(action==="open-settings"){ ui.settingsView="root"; render(); return; }
   if(action==="close-settings"){ ui.settingsView=null; render(); return; }
   if(action==="settings-back"){ ui.settingsView="root"; render(); return; }
-  if(action==="settings-open"){ ui.settingsView=t.dataset.view; render(); return; }
+  if(action==="settings-open"){ ui.settingsView=t.dataset.view; if(t.dataset.view==="shelves") ui.shelvesLoc=ui.loc; render(); return; }
   if(action==="open-instructions"){ ui.settingsView=null; ui.showInstructions=true; render(); return; }
   if(action==="close-instructions"){ ui.showInstructions=false; if(!state.settings.seenIntro){ state.settings.seenIntro=true; saveState(); } render(); return; }
 
+  if(action==="set-shelves-loc"){ ui.shelvesLoc=t.dataset.loc; render(); return; }
   if(action==="shelf-move"){
+    const shelves = state.shelves[ui.shelvesLoc];
     const i = +t.dataset.index, dir=+t.dataset.dir, j=i+dir;
-    if(j<0||j>=state.shelves.length) return;
-    [state.shelves[i], state.shelves[j]] = [state.shelves[j], state.shelves[i]];
+    if(j<0||j>=shelves.length) return;
+    [shelves[i], shelves[j]] = [shelves[j], shelves[i]];
     saveState(); render(); return;
   }
   if(action==="shelf-delete"){
-    if(state.shelves.length<=1) return;
-    const i = +t.dataset.index; const removed = state.shelves[i];
-    state.shelves.splice(i,1);
-    const fallback = state.shelves[state.shelves.length-1];
-    state.items.forEach(it => { if(it.shelf===removed) it.shelf=fallback; });
+    const shelves = state.shelves[ui.shelvesLoc];
+    if(shelves.length<=1) return;
+    const i = +t.dataset.index; const removed = shelves[i];
+    shelves.splice(i,1);
+    const fallback = shelves[shelves.length-1];
+    state.items.forEach(it => { if(it.location===ui.shelvesLoc && it.shelf===removed) it.shelf=fallback; });
     saveState(); render(); return;
   }
   if(action==="shelf-add"){
     const input = document.getElementById("new-shelf-name");
     const val = input.value.trim(); if(!val) return;
-    state.shelves.push(val); saveState(); render(); return;
+    state.shelves[ui.shelvesLoc].push(val); saveState(); render(); return;
   }
   if(action==="set-accent"){ state.settings.accent=t.dataset.accent; saveState(); render(); return; }
   if(action==="set-mode"){ state.settings.mode=t.dataset.mode; saveState(); render(); return; }
@@ -1573,12 +1607,13 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("focusout", (e) => {
   const t = e.target;
   if(t.dataset && t.dataset.actionBlur==="rename-shelf"){
+    const shelves = state.shelves[ui.shelvesLoc];
     const i = +t.dataset.shelfIndex;
-    const oldName = state.shelves[i];
+    const oldName = shelves[i];
     const newName = t.value.trim();
     if(newName && newName!==oldName){
-      state.shelves[i]=newName;
-      state.items.forEach(it => { if(it.shelf===oldName) it.shelf=newName; });
+      shelves[i]=newName;
+      state.items.forEach(it => { if(it.location===ui.shelvesLoc && it.shelf===oldName) it.shelf=newName; });
       saveState();
     }
   }
@@ -1636,7 +1671,7 @@ function doBackupImport(){
   state = {
     items: parsed.items||[], recipes: parsed.recipes||[...SEED_RECIPES, ...BOOK_RECIPES].map(r=>({...r})),
     shopping: parsed.shopping||[], plan: parsed.plan||{},
-    shelves: (Array.isArray(parsed.shelves)&&parsed.shelves.length) ? parsed.shelves : [...DEFAULT_SHELVES],
+    shelves: normalizeShelves(parsed.shelves),
     productFacts: (parsed.productFacts && typeof parsed.productFacts==="object") ? parsed.productFacts : {},
     settings: { accent: parsed.settings?.accent||"green", mode: parsed.settings?.mode||"system", seenIntro:true },
   };
