@@ -532,6 +532,7 @@ function icon(name, size){
     x: `<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>`,
     check: `<polyline points="5,13 10,18 19,7"/>`,
     trash: `<path d="M4 7h16"/><path d="M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/><path d="M6 7l1 13a1.5 1.5 0 0 0 1.5 1.4h7a1.5 1.5 0 0 0 1.5-1.4L18 7"/>`,
+    copy: `<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>`,
     chevDown: `<polyline points="6,9 12,15 18,9"/>`,
     chevUp: `<polyline points="6,15 12,9 18,15"/>`,
     chevRight: `<polyline points="9,6 15,12 9,18"/>`,
@@ -922,6 +923,7 @@ function renderFridge(){
           <div class="card-meta mono">${it.pieceCount ? `${it.pieceCount} × ${it.pieceQty}${esc(it.unit)} = ${it.qty}${esc(it.unit)}` : `${it.qty} ${esc(it.unit)}`}${kcal!==null?` · ≈${kcal} ккал`:""}${it.price?` · ${it.price}€${it.store?" ("+esc(it.store)+")":""}`:""}</div>
         </div>
         ${(it.pieceCount || !isWeight(it.unit)) ? `<button class="round-btn" data-action="item-decrement" data-id="${it.id}" aria-label="Использовать одну штуку">${icon("minus",15)}</button>` : ""}
+        <button class="round-btn" style="background:transparent;color:var(--muted);" data-action="duplicate-item" data-id="${it.id}" aria-label="Скопировать продукт">${icon("copy",14)}</button>
         <button class="round-btn" style="background:transparent;color:var(--muted);" data-action="edit-item" data-id="${it.id}">${icon("pencil",14)}</button>
         <button class="round-btn" style="background:transparent;color:var(--muted);" data-action="remove-item" data-id="${it.id}">${icon("trash",15)}</button>
       </div>`;
@@ -1172,9 +1174,11 @@ function updateExpiryPreview(){
 function renderAddItemSheet(){
   const s = ui.itemForm || (ui.itemForm = { openExtra:false });
   const editing = s.editId ? state.items.find(i=>i.id===s.editId) : null;
-  const v = (field, fallback) => editing && editing[field]!=null ? editing[field] : (fallback ?? "");
+  const duplicateFrom = (!editing && s.duplicateFrom) ? state.items.find(i=>i.id===s.duplicateFrom) : null;
+  const source = editing || duplicateFrom;
+  const v = (field, fallback) => source && source[field]!=null ? source[field] : (fallback ?? "");
   const loc = editing ? editing.location : ui.loc;
-  s.expiryMode = s.expiryMode || (editing && editing.madeDate ? "shelf" : "date");
+  s.expiryMode = s.expiryMode || (source && source.madeDate ? "shelf" : "date");
   return `<div class="sheet-overlay" data-action="close-sheet"></div>
   <div class="sheet">
     <div class="sheet-header"><span class="sheet-title display">${editing ? "Изменить продукт" : `Новый продукт (${(LOCATIONS.find(l=>l.id===loc)||LOCATIONS[0]).label.toLowerCase()})`}</span>
@@ -1184,7 +1188,7 @@ function renderAddItemSheet(){
     <div class="row-gap">
       <div class="flex1" style="display:flex;align-items:center;gap:6px;">
         <button type="button" class="tiny-btn" style="width:30px;height:30px;" data-action="qty-step" data-dir="-1">${icon("minus",13)}</button>
-        <input class="f" id="new-qty" placeholder="Кол-во" type="number" style="margin-bottom:0;text-align:center;" value="${esc(editing && editing.pieceQty!=null ? editing.pieceQty : v("qty"))}">
+        <input class="f" id="new-qty" placeholder="Кол-во" type="number" style="margin-bottom:0;text-align:center;" value="${esc(source && source.pieceQty!=null ? source.pieceQty : v("qty"))}">
         <button type="button" class="tiny-btn" style="width:30px;height:30px;" data-action="qty-step" data-dir="1">${icon("plus",13)}</button>
       </div>
       <select class="f flex1" id="new-unit">${UNITS.filter(u=>u!=='порции').map(u=>`<option ${u===v("unit","г")?'selected':''}>${u}</option>`).join("")}</select>
@@ -1375,7 +1379,7 @@ function renderInstructionsModal(){
     <div class="modal">
       <h2 class="display">Как пользоваться</h2>
       <p class="hint" style="margin:0 0 4px;">Коротко — что где находится.</p>
-      <div class="guide-block"><h3>${icon("fridge",14)} Холодильник</h3><p>Добавляйте продукты кнопкой «+». Срок годности можно указать напрямую или как «дата изготовления + срок хранения» (как на упаковке) — приложение само посчитает дату окончания. Есть полка и (опционально) марка, фото, калорийность и цена — значок карандаша на карточке продукта открывает её для редактирования. Продукты с истекающим сроком (≤2 дня) подсвечиваются жёлтым/красным и поднимаются наверх своей полки. Переключатель сверху — холодильник, морозилка или перекусы.</p></div>
+      <div class="guide-block"><h3>${icon("fridge",14)} Холодильник</h3><p>Добавляйте продукты кнопкой «+». Срок годности можно указать напрямую или как «дата изготовления + срок хранения» (как на упаковке) — приложение само посчитает дату окончания. Есть полка и (опционально) марка, фото, калорийность и цена — значок карандаша на карточке открывает её для редактирования, а значок копирования создаёт новый продукт с теми же данными (удобно для того же товара с другим вкусом — останется только поменять название). Продукты с истекающим сроком (≤2 дня) подсвечиваются жёлтым/красным и поднимаются наверх своей полки. Переключатель сверху — холодильник, морозилка или перекусы.</p></div>
       <div class="guide-block"><h3>${icon("book",14)} Рецепты</h3><p>У каждого рецепта — метка «можно готовить» или «X/Y есть», в зависимости от того, что лежит в холодильнике. Откройте рецепт, чтобы увидеть состав и способ приготовления. Кнопка «Приготовила ✓» открывает экран, где для каждого продукта можно выбрать конкретную пачку из холодильника и вписать её реальный вес — калорийность блюда посчитается именно по ним, а не по усреднённым цифрам рецепта. Выбранное спишется с полок, а готовое блюдо появится в холодильнике со своим сроком хранения.</p></div>
       <div class="guide-block"><h3>${icon("calendar",14)} Меню</h3><p>Планируйте завтрак/обед/ужин на неделю вперёд, выбирая рецепты в ячейках. Кнопка «Собрать список покупок на неделю» посчитает, каких продуктов не хватает — с учётом того, что уже есть дома.</p></div>
       <div class="guide-block"><h3>${icon("cart",14)} Покупки</h3><p>Добавляйте вручную или из рецепта («В список покупок»). Отмечайте купленное галочкой и переносите одной кнопкой в холодильник.</p></div>
@@ -1455,6 +1459,16 @@ document.addEventListener("click", (e) => {
     ui.sheet = "add-item";
     ui.itemForm = { editId: it.id, openExtra: !!(it.brand||it.photo||it.kcal100!=null||it.price!=null), photoDataUrl: it.photo||null };
     render();
+    return;
+  }
+  if(action==="duplicate-item"){
+    const it = state.items.find(i=>i.id===t.dataset.id);
+    if(!it) return;
+    ui.sheet = "add-item";
+    ui.itemForm = { duplicateFrom: it.id, openExtra: !!(it.brand||it.photo||it.kcal100!=null||it.price!=null), photoDataUrl: it.photo||null };
+    render();
+    const nameInput = document.getElementById("new-name");
+    if(nameInput){ nameInput.focus(); nameInput.select(); }
     return;
   }
   if(action==="close-sheet"){ ui.sheet=null; render(); return; }
