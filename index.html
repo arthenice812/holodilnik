@@ -610,7 +610,7 @@ function recordProductFacts(item){
   if(!item || !item.name || item.type==="dish") return;
   const hasNutrition = item.kcal100!=null || item.protein100!=null || item.fat100!=null || item.carbs100!=null;
   const hasPrice = item.price!=null;
-  if(!hasNutrition && !hasPrice) return;
+  if(!hasNutrition && !hasPrice && !item.store) return;
   const key = norm(item.name);
   const existing = state.productFacts[key] || {};
   state.productFacts[key] = {
@@ -628,6 +628,9 @@ function lookupProductFacts(name){
   const n = norm(name);
   if(state.productFacts[n]) return state.productFacts[n];
   return Object.values(state.productFacts).find(f => norm(f.name).includes(n) || n.includes(norm(f.name))) || null;
+}
+function knownStores(){
+  return [...new Set(Object.values(state.productFacts).map(f=>f.store).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ru"));
 }
 // Real recipe nutrition computed from the user's own remembered product data (not the book estimate).
 // Only counts an ingredient when we know its per-100g facts AND the unit matches exactly (г vs кг etc. isn't converted).
@@ -1237,8 +1240,9 @@ function renderAddItemSheet(){
       <p class="hint" style="margin:-6px 0 10px;">Эти данные приложение запомнит по названию продукта — пригодятся для расчёта реальной калорийности рецептов.</p>
       <div class="row-gap">
         <input class="f flex1" id="new-price" placeholder="Цена, €" type="number" value="${esc(v("price"))}">
-        <input class="f flex1" id="new-store" placeholder="Магазин" value="${esc(v("store"))}">
+        <input class="f flex1" id="new-store" placeholder="Магазин" value="${esc(v("store"))}" list="store-options" autocomplete="off">
       </div>
+      <datalist id="store-options">${knownStores().map(s=>`<option value="${esc(s)}">`).join("")}</datalist>
       <div id="price-hint" class="hint" style="margin:-6px 0 10px;"></div>
     </div>
     <button class="btn-primary" data-action="submit-item">${editing ? "Сохранить" : "Добавить"}</button>
