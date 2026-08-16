@@ -831,7 +831,6 @@ function render(){
     ${ui.sheet ? renderSheet() : ""}
     ${ui.toast ? `<div class="toast">${esc(ui.toast)}</div>` : ""}
   `;
-  bindDynamicInputs();
 }
 
 function renderHeader(){
@@ -1371,9 +1370,14 @@ function renderBackupSheet(){
     <p class="hint" style="margin-top:0;">Скачает файл .json со всеми продуктами, рецептами, списком покупок и меню. Храните его — из него можно всё восстановить.</p>
     <button class="btn-primary" data-action="backup-export">${icon("download",16)} <span style="margin-left:6px;">Скачать резервную копию</span></button>
     <div class="section-label">Восстановить</div>
-    <p class="hint" style="margin-top:0;">Откройте .json-файл резервной копии в любом текстовом редакторе, скопируйте содержимое целиком и вставьте сюда.</p>
-    <textarea class="f" id="restore-text" style="min-height:90px;" placeholder="Вставьте содержимое файла резервной копии..."></textarea>
-    <button class="btn-secondary" data-action="backup-import">${icon("upload",16)} <span style="margin-left:6px;">Восстановить из копии</span></button>
+    <p class="hint" style="margin-top:0;">Выберите .json-файл резервной копии с устройства (из папки «Загрузки» или где вы его сохранили).</p>
+    <input type="file" accept=".json,application/json" id="restore-file" style="display:none;">
+    <button class="btn-secondary" data-action="pick-restore-file">${icon("upload",16)} <span style="margin-left:6px;">Выбрать файл резервной копии</span></button>
+    <button class="link-row" data-action="toggle-restore-text">${icon("chevDown",14)} или вставить текст вручную</button>
+    <div id="restore-text-block" style="display:none;">
+      <textarea class="f" id="restore-text" style="min-height:90px;" placeholder="Вставьте содержимое файла резервной копии..."></textarea>
+      <button class="btn-secondary" data-action="backup-import">${icon("upload",16)} <span style="margin-left:6px;">Восстановить из текста</span></button>
+    </div>
     <div id="backup-fallback"></div>
   </div>`;
 }
@@ -1414,6 +1418,14 @@ function bindDynamicInputs(){
   }
 
   bindPhotoInput();
+
+  const restoreFileInput = document.getElementById("restore-file");
+  if(restoreFileInput){
+    restoreFileInput.addEventListener("change", () => {
+      const file = restoreFileInput.files[0];
+      if(file) handleRestoreFile(file);
+    });
+  }
 
   const shelfValueInput = document.getElementById("new-shelf-value");
   if(shelfValueInput){
@@ -1629,6 +1641,12 @@ document.addEventListener("click", (e) => {
 
   if(action==="backup-export"){ doBackupExport(); return; }
   if(action==="backup-import"){ doBackupImport(); return; }
+  if(action==="pick-restore-file"){ document.getElementById("restore-file").click(); return; }
+  if(action==="toggle-restore-text"){
+    const block = document.getElementById("restore-text-block");
+    block.style.display = block.style.display==="none" ? "block" : "none";
+    return;
+  }
 });
 
 document.addEventListener("keydown", (e) => {
@@ -1673,6 +1691,7 @@ render = function(){
     else if(ui.settingsView==="backup") extra.innerHTML = renderBackupSheet();
     while(extra.firstChild) root.appendChild(extra.firstChild);
   }
+  bindDynamicInputs();
 };
 
 /* ================= backup export/import ================= */
@@ -1708,11 +1727,11 @@ async function doBackupExport(){
   }
 }
 
-function doBackupImport(){
-  const raw = document.getElementById("restore-text").value.trim();
-  if(!raw){ showToast("Вставьте текст резервной копии"); return; }
+function restoreFromBackupText(raw){
+  raw = (raw||"").trim();
+  if(!raw){ showToast("Файл пустой"); return; }
   let parsed;
-  try{ parsed = JSON.parse(raw); }catch(e){ showToast("Не удалось прочитать файл — проверьте, что скопирован весь текст"); return; }
+  try{ parsed = JSON.parse(raw); }catch(e){ showToast("Не удалось прочитать файл — это не резервная копия «Мой холодильник»"); return; }
   if(!parsed || !Array.isArray(parsed.items) || !Array.isArray(parsed.recipes)){
     showToast("Файл не похож на резервную копию «Мой холодильник»"); return;
   }
@@ -1727,6 +1746,15 @@ function doBackupImport(){
   ui.settingsView=null; ui.sheet=null;
   persistAndRender();
   showToast("Данные восстановлены из резервной копии");
+}
+function doBackupImport(){
+  restoreFromBackupText(document.getElementById("restore-text").value);
+}
+function handleRestoreFile(file){
+  const reader = new FileReader();
+  reader.onload = () => restoreFromBackupText(String(reader.result||""));
+  reader.onerror = () => showToast("Не удалось прочитать файл");
+  reader.readAsText(file);
 }
 
 /* ================= init ================= */
