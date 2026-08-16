@@ -1680,6 +1680,7 @@ render = function(){
 async function doBackupExport(){
   const payload = JSON.stringify({ ...state, exportedAt: new Date().toISOString(), app:"moy-holodilnik", version:3 }, null, 2);
   const filename = `moy-holodilnik-backup-${todayISO()}.json`;
+  // Inside the Claude artifact viewer, a plain <a download> is inert (sandboxed) — this path handles that case.
   try{
     const downloads = window.claude ? await window.claude.use("downloads") : null;
     if(downloads){
@@ -1687,6 +1688,19 @@ async function doBackupExport(){
       showToast("Резервная копия сохранена");
       return;
     }
+  }catch(err){ /* fall through */ }
+  // Normal browser download (GitHub Pages and everywhere outside the Claude viewer) — works without any special API.
+  try{
+    const blob = new Blob([payload], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    showToast("Резервная копия скачивается");
+    return;
   }catch(err){ /* fall through to manual fallback */ }
   const box = document.getElementById("backup-fallback");
   if(box){
