@@ -1220,7 +1220,7 @@ async function startBarcodeScan(){
       if(codes.length){
         const code = codes[0].rawValue;
         stopBarcodeScan();
-        ui.sheet = null;
+        ui.sheet = "add-item"; // back to the item form, not closed — it still holds whatever was typed
         render();
         const inp = document.getElementById("new-barcode");
         if(inp) inp.value = code;
@@ -1238,21 +1238,41 @@ function stopBarcodeScan(){
   if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; }
 }
 
+// The add-item form only lives in the DOM (its fields aren't mirrored into ui.itemForm as you type),
+// so a normal showToast() — which does a full render() — would wipe out anything already typed,
+// including whatever this very lookup just filled in. This toast only touches the .toast element itself.
+function showFormToast(msg){
+  const root = document.getElementById("app");
+  if(!root) return;
+  let el = root.querySelector(".toast.lite");
+  if(!el){
+    el = document.createElement("div");
+    el.className = "toast lite";
+    root.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.remove("on");
+  void el.offsetWidth; // restart the fade-in even if a previous message is still showing
+  el.classList.add("on");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("on"), 2600);
+}
+
 // Looks the barcode up on Open Food Facts (free, no API key, covers most packaged groceries) and
 // fills in whatever fields on the add-item form are still empty — never overwrites what's already typed.
 async function lookupBarcodeAndFill(code){
   if(!code) return;
-  showToast("Ищу товар по штрихкоду…");
+  showFormToast("Ищу товар по штрихкоду…");
   let data;
   try{
     const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_ru,brands,nutriments,quantity`);
     data = await res.json();
   }catch(e){
-    showToast("Не удалось связаться с базой продуктов — проверьте интернет");
+    showFormToast("Не удалось связаться с базой продуктов — проверьте интернет");
     return;
   }
   if(!data || data.status!==1 || !data.product){
-    showToast("Товар с этим штрихкодом не найден — заполните вручную");
+    showFormToast("Товар с этим штрихкодом не найден — заполните вручную");
     return;
   }
   const p = data.product;
@@ -1277,7 +1297,7 @@ async function lookupBarcodeAndFill(code){
     if(extra) extra.style.display = "block";
     if(toggleBtn) toggleBtn.innerHTML = `${icon("chevUp",14)} марка, фото, калорийность и цена (необязательно)`;
   }
-  showToast(foundName ? `Найдено: ${foundName}` : "Товар найден, но без названия — часть полей заполнена");
+  showFormToast(foundName ? `Найдено: ${foundName}` : "Товар найден, но без названия — часть полей заполнена");
 }
 
 const SHELF_UNITS = [ { id:"days", label:"дней" }, { id:"weeks", label:"недель" }, { id:"months", label:"месяцев" } ];
