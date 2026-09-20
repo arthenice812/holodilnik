@@ -1258,6 +1258,19 @@ function showFormToast(msg){
   el._t = setTimeout(() => el.classList.remove("on"), 2600);
 }
 
+// Open Food Facts' free-text package size ("400 g", "1 L", "0,5кг") -> {qty, unit} in this app's units.
+// Returns null when the text doesn't contain a recognizable weight/volume (multipacks like "6x125g", missing data, etc).
+function parseQuantityString(q){
+  if(!q) return null;
+  const m = String(q).match(/(\d+(?:[.,]\d+)?)\s*(кг|kg|г|гр|gr|g|л|l|мл|ml)\b/i);
+  if(!m) return null;
+  const val = parseFloat(m[1].replace(",", "."));
+  if(!val) return null;
+  const raw = m[2].toLowerCase();
+  const unit = (raw==="кг"||raw==="kg") ? "кг" : (raw==="л"||raw==="l") ? "л" : (raw==="мл"||raw==="ml") ? "мл" : "г";
+  return { qty: val, unit };
+}
+
 // Looks the barcode up on Open Food Facts (free, no API key, covers most packaged groceries) and
 // fills in whatever fields on the add-item form are still empty — never overwrites what's already typed.
 async function lookupBarcodeAndFill(code){
@@ -1265,7 +1278,7 @@ async function lookupBarcodeAndFill(code){
   showFormToast("Ищу товар по штрихкоду…");
   let data;
   try{
-    const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_ru,brands,nutriments,quantity`);
+    const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_ru,brands,nutriments,quantity`, { signal: AbortSignal.timeout(10000) });
     data = await res.json();
   }catch(e){
     showFormToast("Не удалось связаться с базой продуктов — проверьте интернет");
@@ -1278,6 +1291,8 @@ async function lookupBarcodeAndFill(code){
   const p = data.product;
   const nameEl = document.getElementById("new-name");
   const brandEl = document.getElementById("new-brand");
+  const qtyEl = document.getElementById("new-qty");
+  const unitEl = document.getElementById("new-unit");
   const kcalEl = document.getElementById("new-kcal");
   const proteinEl = document.getElementById("new-protein");
   const fatEl = document.getElementById("new-fat");
@@ -1285,6 +1300,14 @@ async function lookupBarcodeAndFill(code){
   const foundName = p.product_name_ru || p.product_name || "";
   if(nameEl && !nameEl.value.trim() && foundName) nameEl.value = foundName;
   if(brandEl && !brandEl.value.trim() && p.brands) brandEl.value = p.brands.split(",")[0].trim();
+  // "Вес/объём одной штуки" is required to save the item — without it "Добавить" refuses to do
+  // anything, which from the outside looks like the button is broken. The package size Open Food
+  // Facts stores (e.g. "400 g", "1 L") fills that field in directly so scanning alone is enough.
+  const parsedQty = parseQuantityString(p.quantity);
+  if(parsedQty && qtyEl && !qtyEl.value){
+    qtyEl.value = parsedQty.qty;
+    if(unitEl) unitEl.value = parsedQty.unit;
+  }
   const n = p.nutriments || {};
   if(kcalEl && !kcalEl.value && n["energy-kcal_100g"]!=null) kcalEl.value = Math.round(n["energy-kcal_100g"]);
   if(proteinEl && !proteinEl.value && n["proteins_100g"]!=null) proteinEl.value = Math.round(n["proteins_100g"]);
@@ -1677,7 +1700,10 @@ document.addEventListener("click", (e) => {
   if(action==="submit-item"){
     const name = document.getElementById("new-name").value.trim();
     const perPieceQty = +document.getElementById("new-qty").value;
-    if(!name || !perPieceQty) return;
+    // Previously this just silently did nothing on missing required fields — from the outside that
+    // looked exactly like "ничего не добавляется": no error, no shake, button just doesn't work.
+    if(!name){ showFormToast("Введите название продукта"); return; }
+    if(!perPieceQty){ showFormToast("Укажите вес/объём одной штуки — без него не сохранить"); return; }
     const pieceCount = Math.max(1, +document.getElementById("new-pieces").value || 1);
     const qty = +(perPieceQty * pieceCount).toFixed(2);
     const kcalVal = document.getElementById("new-kcal").value;
