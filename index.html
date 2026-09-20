@@ -564,7 +564,7 @@ function defaultState(){
     plan: {},
     shelves: { fridge:[...DEFAULT_SHELVES.fridge], freezer:[...DEFAULT_SHELVES.freezer], snacks:[...DEFAULT_SHELVES.snacks] },
     productFacts: {},
-    settings: { accent:"green", mode:"system", seenIntro:false },
+    settings: { accent:"green", mode:"system", seenIntro:false, weeklyBudget:null },
   };
 }
 // Accepts the old single flat shelf list (pre-multi-location) as well as the current per-location shape.
@@ -777,7 +777,8 @@ function moveBoughtToFridge(){
   state.shopping = state.shopping.filter(s=>!s.bought);
   persistAndRender();
 }
-function generateWeekShopping(start){
+// Every ingredient the week's planned dishes call for, summed up (ignores what's already in stock).
+function weekNeededIngredients(start){
   const dates = weekDates(start);
   const needed = {};
   dates.forEach(d => {
@@ -792,6 +793,45 @@ function generateWeekShopping(start){
       });
     });
   });
+  return needed;
+}
+
+// Rough weekly cost: for every ingredient still missing from stock, if we remember what it cost last
+// time it was bought, count that once. This is an approximation (a remembered price isn't a per-gram
+// unit price, just "what a purchase of this cost last time"), not a real per-store total.
+function weekCostEstimate(start){
+  const needed = weekNeededIngredients(start);
+  let total = 0, known = 0, unknown = 0;
+  Object.values(needed).forEach(n => {
+    const match = findMatch(n.name);
+    let remain = n.qty;
+    if(match && match.unit===n.unit) remain = Math.max(0, n.qty-match.qty);
+    if(remain<=0) return;
+    const facts = lookupProductFacts(n.name);
+    if(facts && facts.price!=null){ total += facts.price; known++; }
+    else unknown++;
+  });
+  return { total, known, unknown };
+}
+
+function renderWeekBudget(dates){
+  const budget = state.settings.weeklyBudget;
+  const est = weekCostEstimate(ui.weekStart);
+  const hasPlan = dates.some(d => state.plan[d] && MEAL_SLOTS.some(slot=>state.plan[d][slot]));
+  const over = budget && est.total>budget;
+  return `<div class="card" style="margin-bottom:12px;">
+    <div class="section-label" style="margin-top:0;">💰 Бюджет недели</div>
+    <input class="f" type="number" inputmode="decimal" id="week-budget-input" data-action-blur="set-week-budget" placeholder="Например, 8000" value="${budget||""}">
+    ${hasPlan ? `<p class="hint" style="margin:0 0 4px;">
+      Примерно нужно докупить на <b style="color:var(--ink);">${Math.round(est.total)} ₽</b>${est.unknown ? ` (для ${est.unknown} продукт${est.unknown===1?"а":"ов"} цена неизвестна — не учтена)` : ""}.
+      ${budget ? (over ? `<span style="color:var(--danger);font-weight:700;">Выше бюджета на ${Math.round(est.total-budget)} ₽.</span>` : `<span style="color:var(--fresh);font-weight:700;">В рамках бюджета.</span>`) : ""}
+    </p>
+    <p class="hint" style="margin:0;">Оценка по ценам, которые вы уже вводили при добавлении продуктов — не по ценам конкретного магазина.</p>` : `<p class="hint" style="margin:0;">Выберите блюда на неделю, чтобы увидеть примерную стоимость докупки.</p>`}
+  </div>`;
+}
+
+function generateWeekShopping(start){
+  const needed = weekNeededIngredients(start);
   let added = 0;
   Object.values(needed).forEach(n => {
     const match = findMatch(n.name);
@@ -996,8 +1036,12 @@ function renderRecipes(){
         <button class="btn-ghost" data-action="delete-recipe" data-id="${r.id}">Удалить рецепт</button>
       </div>`;
     }
+    const hero = open && r.photo ? `<img src="${r.photo}" style="width:100%;height:170px;object-fit:cover;display:block;">` : "";
+    const thumb = !open && r.photo ? `<img src="${r.photo}" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;">` : "";
     return `<div class="recipe-card">
+      ${hero}
       <div class="recipe-top" role="button" tabindex="0" data-action="toggle-recipe" data-id="${r.id}">
+        ${thumb}
         <div style="flex:1;min-width:0;">
           <div class="card-title">${esc(r.name)}</div>
           <div class="card-meta mono">${esc(r.category)} · ${r.kcal100??"—"} ккал/100г · ${esc(r.time||"—")}</div>
@@ -1013,14 +1057,49 @@ function renderRecipes(){
 
 /* ================= plan tab ================= */
 
+function recipesByCat(cat){
+  return state.recipes.filter(r => r.category===cat || (cat==="Обед" && r.category==="Салат"));
+}
+
+// Fills only the empty slots for the week (never overwrites a dish you already picked yourself),
+// picking randomly within each meal's category and avoiding repeats within the week where possible.
+function autofillWeek(start){
+  const dates = weekDates(start);
+  const usedThisWeek = new Set();
+  dates.forEach(d => { const day=state.plan[d]; if(day) MEAL_SLOTS.forEach(slot => { if(day[slot]) usedThisWeek.add(day[slot]); }); });
+  let filled = 0;
+  const emptyCats = new Set();
+  dates.forEach(date => {
+    if(!state.plan[date]) state.plan[date] = {};
+    MEAL_SLOTS.forEach(slot => {
+      if(state.plan[date][slot]) return;
+      const pool = recipesByCat(slot);
+      if(!pool.length){ emptyCats.add(slot); return; }
+      let candidates = pool.filter(r => !usedThisWeek.has(r.id));
+      if(!candidates.length) candidates = pool; // ran out of unique recipes — allow repeats rather than leave it blank
+      const pick = candidates[Math.floor(Math.random()*candidates.length)];
+      state.plan[date][slot] = pick.id;
+      usedThisWeek.add(pick.id);
+      filled++;
+    });
+  });
+  saveState();
+  render();
+  if(!filled) showToast("Все ячейки уже заполнены — сначала очистите нужные (выберите «—»)");
+  else if(emptyCats.size) showToast(`Заполнено блюд: ${filled}. Нет ни одного рецепта в категории: ${[...emptyCats].join(", ")}`);
+  else showToast(`Меню на неделю собрано — заполнено блюд: ${filled}`);
+}
+
 function renderPlan(){
   const dates = weekDates(ui.weekStart);
-  const recipesByCat = (cat) => state.recipes.filter(r => r.category===cat || (cat==="Обед" && r.category==="Салат"));
   let html = `<div class="week-nav">
     <button class="week-btn" data-action="week-shift" data-dir="-1">${icon("arrowLeft",14)}</button>
     <span class="mono" style="font-size:12.5px;">${parseISODate(dates[0]).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})} – ${parseISODate(dates[6]).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})}</span>
     <button class="week-btn" data-action="week-shift" data-dir="1">${icon("arrowRight",14)}</button>
-  </div>`;
+  </div>
+  <button class="btn-primary" style="margin-bottom:12px;" data-action="autofill-week">🎲 Собрать меню на неделю</button>
+  <p class="hint" style="margin-top:-6px;">Заполнит только пустые ячейки блюдами из ваших рецептов — то, что уже выбрано вручную, не тронет.</p>
+  ${renderWeekBudget(dates)}`;
 
   dates.forEach((date,i) => {
     html += `<div class="day-block"><div class="day-label">${WEEKDAYS[i]} · ${parseISODate(date).getDate()}</div>`;
@@ -1431,6 +1510,31 @@ function ingRowHtml(){
       <select class="f" style="margin-bottom:0;width:84px;" data-ing="unit">${UNITS.filter(u=>u!=='порции').map(u=>`<option>${u}</option>`).join("")}</select>
     </div>`;
 }
+function renderRecipePhotoRow(){
+  const s = ui.recipeForm;
+  return `<button class="btn-secondary" style="width:auto;flex:1;margin-bottom:0;padding:9px 0;" data-action="pick-recipe-photo">${icon("camera",15)} ${s.photoDataUrl ? "Заменить фото" : "Добавить фото"}</button>
+    ${s.photoDataUrl ? `<img src="${s.photoDataUrl}" style="width:44px;height:44px;border-radius:10px;object-fit:cover;border:1px solid var(--border);flex-shrink:0;">
+    <button class="round-btn" style="background:transparent;color:var(--danger);flex-shrink:0;" data-action="clear-recipe-photo">${icon("x",14)}</button>` : ""}`;
+}
+function refreshRecipePhotoRow(){
+  const row = document.getElementById("r-photo-row");
+  if(!row) return;
+  row.innerHTML = `<input type="file" accept="image/*" id="r-photo" style="display:none;">${renderRecipePhotoRow()}`;
+  bindRecipePhotoInput();
+}
+function bindRecipePhotoInput(){
+  const photoInput = document.getElementById("r-photo");
+  if(!photoInput) return;
+  photoInput.addEventListener("change", async () => {
+    const file = photoInput.files[0];
+    if(!file) return;
+    try{
+      ui.recipeForm.photoDataUrl = await compressImageFile(file, 480, 0.65);
+      refreshRecipePhotoRow();
+    }catch(e){ showToast("Не удалось загрузить фото"); }
+  });
+}
+
 function renderAddRecipeSheet(){
   const s = ui.recipeForm || (ui.recipeForm = { ingCount:1 });
   let ingRows = "";
@@ -1440,6 +1544,11 @@ function renderAddRecipeSheet(){
     <div class="sheet-header"><span class="sheet-title display">Новый рецепт</span>
       <button class="icon-btn" data-action="close-sheet">${icon("x",18)}</button></div>
     <input class="f" id="r-name" placeholder="Название блюда">
+    <label class="f-label">Фото</label>
+    <div id="r-photo-row" class="row-gap" style="align-items:center;margin-bottom:10px;">
+      <input type="file" accept="image/*" id="r-photo" style="display:none;">
+      ${renderRecipePhotoRow()}
+    </div>
     <div class="row-gap">
       <select class="f flex1" id="r-cat">${CATEGORIES.filter(c=>c!=='Все').map(c=>`<option>${c}</option>`).join("")}</select>
       <input class="f flex1" id="r-kcal" placeholder="Ккал/100г" type="number">
@@ -1597,6 +1706,7 @@ function bindDynamicInputs(){
   }
 
   bindPhotoInput();
+  bindRecipePhotoInput();
 
   const restoreFileInput = document.getElementById("restore-file");
   if(restoreFileInput){
@@ -1688,6 +1798,8 @@ document.addEventListener("click", (e) => {
   }
   if(action==="pick-photo"){ document.getElementById("new-photo").click(); return; }
   if(action==="clear-photo"){ ui.itemForm.photoDataUrl = null; refreshPhotoRow(); return; }
+  if(action==="pick-recipe-photo"){ document.getElementById("r-photo").click(); return; }
+  if(action==="clear-recipe-photo"){ ui.recipeForm.photoDataUrl = null; refreshRecipePhotoRow(); return; }
   if(action==="set-expiry-mode"){
     ui.itemForm.expiryMode = t.dataset.mode;
     document.querySelectorAll('[data-action="set-expiry-mode"]').forEach(b => b.classList.toggle("active", b.dataset.mode===t.dataset.mode));
@@ -1781,11 +1893,13 @@ document.addEventListener("click", (e) => {
       protein:null, fat:null, carbs:null, time:document.getElementById("r-time").value||"—",
       servings:+document.getElementById("r-servings").value||1, shelfDays:4,
       steps:document.getElementById("r-steps").value, ingredients,
+      photo: ui.recipeForm.photoDataUrl || null,
     });
-    ui.sheet=null; persistAndRender(); return;
+    ui.sheet=null; ui.recipeForm=null; persistAndRender(); return;
   }
 
   if(action==="week-shift"){ ui.weekStart = addDays(7*(+t.dataset.dir), ui.weekStart); render(); return; }
+  if(action==="autofill-week"){ autofillWeek(ui.weekStart); return; }
   if(action==="generate-week-shopping"){ generateWeekShopping(ui.weekStart); return; }
 
   if(action==="share-shopping" || action==="copy-shopping"){
@@ -1889,6 +2003,11 @@ document.addEventListener("focusout", (e) => {
       state.items.forEach(it => { if(it.location===ui.shelvesLoc && it.shelf===oldName) it.shelf=newName; });
       saveState();
     }
+  }
+  if(t.dataset && t.dataset.actionBlur==="set-week-budget"){
+    state.settings.weeklyBudget = +t.value || null;
+    saveState();
+    render();
   }
 });
 
